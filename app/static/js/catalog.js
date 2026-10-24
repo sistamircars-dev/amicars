@@ -253,6 +253,45 @@ export async function attachPhotos(productoId, files) {
   return notes;
 }
 
+async function ensureCover(productoId) {
+  const active = await db.producto_imagenes
+    .where("producto_id")
+    .equals(productoId)
+    .filter((row) => row.is_active !== false && (row.cloudinary_url || row.local_blob))
+    .toArray();
+  const queued = await db.offline_media_queue.where("producto_id").equals(productoId).toArray();
+  const hasCover =
+    active.some((row) => row.is_cover) || queued.some((row) => row.is_cover);
+  if (hasCover) {
+    return;
+  }
+  const next = active.sort((a, b) => Number(a.orden || 0) - Number(b.orden || 0))[0];
+  if (next) {
+    await saveLocal("producto_imagenes", { ...next, is_cover: true });
+    return;
+  }
+  const pending = queued.sort((a, b) => Number(a.orden || 0) - Number(b.orden || 0))[0];
+  if (pending) {
+    await db.offline_media_queue.update(pending.id, { is_cover: true });
+  }
+}
+
+export async function removeProductImage(imageId, productoId) {
+  const queued = await db.offline_media_queue.get(imageId);
+  if (queued) {
+    await db.offline_media_queue.delete(imageId);
+    await ensureCover(productoId);
+    return { ok: true, queued: true };
+  }
+  const row = await db.producto_imagenes.get(imageId);
+  if (!row || row.producto_id !== productoId) {
+    return { ok: false };
+  }
+  await saveLocal("producto_imagenes", { ...row, is_active: false, is_cover: false });
+  await ensureCover(productoId);
+  return { ok: true };
+}
+
 export async function writeHistorico(productoId, refEntrada, refVenta, movimientoId) {
   const openRows = await db.historico_ref.filter((row) => row.producto_id === productoId && !row.vigente_hasta).toArray();
   const stamp = nowIso();

@@ -1,9 +1,11 @@
+import { createCombo } from "./combo.js";
+import { clientComboOptions, loadRegisteredClients } from "./clients.js?v=48";
 import { createDateField } from "./dateField.js?v=34";
 import { db } from "./db.js";
 import { h } from "./dom.js";
 import { formatDisplayDate, formatRate, registerSalida, tasaFor, todayLocal } from "./movements.js";
 import { getRouteParams } from "./nav.js";
-import { mountLines } from "./opsLines.js?v=40";
+import { mountLines } from "./opsLines.js?v=48";
 
 function ticketText(value) {
   return String(value ?? "")
@@ -71,10 +73,12 @@ export function printTicket(ticket) {
   }, 300);
 }
 
+function findClient(clients, id) {
+  return clients.find((row) => row.value === id) || null;
+}
+
 export async function renderSalidas(root) {
   const fecha = createDateField({ value: todayLocal(), ariaLabel: "Fecha" });
-  const cliente = h("input", { class: "app-input" });
-  const documento = h("input", { class: "app-input", placeholder: "V-12345678 o J-12345678-9" });
   const status = h("p", { class: "muted" }, "");
   const linesHost = h("div");
   let items = [];
@@ -82,6 +86,50 @@ export async function renderSalidas(root) {
   let lastTicket = null;
   let seedProductId = getRouteParams().productoId || "";
   const rateLabel = h("p", { class: "muted" }, tasa ? `Tasa ${formatDisplayDate(tasa.fecha)}: ${formatRate(tasa.usd_ves)} Bs/USD` : "Sin tasa BCV guardada. El ticket igual imprime el REF.");
+
+  let clients = await loadRegisteredClients();
+  let linking = false;
+
+  function applyClient(id) {
+    const client = findClient(clients, id);
+    if (!client || linking) {
+      return;
+    }
+    linking = true;
+    clienteCombo.setValue(id, true);
+    documentoCombo.setValue(id, true);
+    linking = false;
+  }
+
+  const clienteCombo = createCombo({
+    options: clientComboOptions(clients),
+    placeholder: "Buscar cliente por nombre…",
+    ariaLabel: "Cliente",
+    freeText: true,
+    onChange(id) {
+      if (linking) {
+        return;
+      }
+      if (id) {
+        applyClient(id);
+      }
+    },
+  });
+
+  const documentoCombo = createCombo({
+    options: clientComboOptions(clients, { docFirst: true }),
+    placeholder: "Buscar por cédula o RIF…",
+    ariaLabel: "Cédula o RIF",
+    freeText: true,
+    onChange(id) {
+      if (linking) {
+        return;
+      }
+      if (id) {
+        applyClient(id);
+      }
+    },
+  });
 
   async function paintLines() {
     const productos = (await db.productos.toArray()).filter((row) => row.is_active !== false);
@@ -115,17 +163,25 @@ export async function renderSalidas(root) {
   save.addEventListener("click", async () => {
     save.disabled = true;
     try {
+      const cliente = clienteCombo.input.value.trim();
+      const documento = documentoCombo.input.value.trim();
       lastTicket = await registerSalida({
         fecha: fecha.value,
-        cliente: cliente.value.trim(),
-        documento: documento.value.trim(),
+        cliente,
+        documento,
         items,
         tasa,
       });
       status.textContent = `Salida ${lastTicket.correlativo} registrada.`;
       printTicket(lastTicket);
-      cliente.value = "";
-      documento.value = "";
+      clients = await loadRegisteredClients();
+      const nameOpts = clientComboOptions(clients);
+      clienteCombo.setOptions(nameOpts);
+      documentoCombo.setOptions(clientComboOptions(clients, { docFirst: true }));
+      clienteCombo.setValue("", true);
+      documentoCombo.setValue("", true);
+      clienteCombo.input.value = "";
+      documentoCombo.input.value = "";
       items = [];
       seedProductId = "";
       await paintLines();
@@ -138,8 +194,14 @@ export async function renderSalidas(root) {
 
   root.replaceChildren(
     h("div", { class: "view-title" }, h("h2", {}, "Salidas")),
-    h("p", { class: "muted" }, "El número de salida es correlativo. El ticket se imprime en el navegador y también funciona sin internet."),
-    h("div", { class: "form-grid" }, h("label", { class: "field-row" }, "Fecha", fecha), h("label", { class: "field-row" }, "Cliente", cliente), h("label", { class: "field-row" }, "Cédula / RIF", documento)),
+    h("p", { class: "muted" }, "El número de salida es correlativo. Busque clientes ya registrados por nombre o documento."),
+    h(
+      "div",
+      { class: "form-grid" },
+      h("label", { class: "field-row" }, "Fecha", fecha),
+      h("label", { class: "field-row" }, "Cliente", clienteCombo.element),
+      h("label", { class: "field-row" }, "Cédula / RIF", documentoCombo.element)
+    ),
     rateLabel,
     linesHost,
     h("div", { class: "toolbar" }, save, printLast),

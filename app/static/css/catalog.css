@@ -818,9 +818,35 @@
   min-width: 7rem;
 }
 
+.photo-chip-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+}
+
 .photo-chip {
   display: inline-flex;
   cursor: zoom-in;
+}
+
+.photo-chip-remove {
+  margin-left: -10px;
+  margin-top: -6px;
+  z-index: 2;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(217, 4, 41, 0.92);
+  color: #fff;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.form-photo-list {
+  margin-bottom: 0.35rem;
 }
 
 .photo-mini {

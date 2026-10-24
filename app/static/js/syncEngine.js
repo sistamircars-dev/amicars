@@ -17,13 +17,13 @@ function isOnline() {
 async function refreshOfflineBadge() {
   const counts = await pendingCount();
   if (!isOnline()) {
-    setSyncStatus("offline", String(counts.total));
+    setSyncStatus("offline", counts.total > 0 ? String(counts.total) : "");
     return counts;
   }
   if (counts.total > 0) {
-    setSyncStatus("retry");
+    setSyncStatus("pending", String(counts.total));
   } else {
-    setSyncStatus("synced");
+    setSyncStatus("connected");
   }
   return counts;
 }
@@ -160,16 +160,18 @@ export async function runSync(force = false) {
     await applyRemoteRevision();
     const leftover = await pendingCount();
     if (leftover.total > 0) {
-      setSyncStatus("retry");
+      setSyncStatus("pending", String(leftover.total));
     } else {
-      setSyncStatus("synced");
+      setSyncStatus("connected");
     }
   } catch (_err) {
     const counts = await pendingCount();
     if (!isOnline()) {
-      setSyncStatus("offline", String(counts.total));
-    } else {
+      setSyncStatus("offline", counts.total > 0 ? String(counts.total) : "");
+    } else if (counts.total > 0) {
       setSyncStatus("retry");
+    } else {
+      setSyncStatus("connected");
     }
   } finally {
     running = false;

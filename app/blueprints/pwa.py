@@ -8,11 +8,11 @@ _INSTALL_CMD = """@echo off
 chcp 65001 >nul
 set "URL={origin}/"
 echo.
-echo  AMIRCARS - Instalacion en este equipo
-echo  No necesita Node ni Python.
-echo  1. Abra la URL, inicie sesion.
-echo  2. Configuracion - Instalar en este equipo.
-echo  3. Sin internet: abra la app instalada; guarda en local.
+echo  AMIRCARS - acceso en este equipo
+echo  ================================
+echo  1. Se abrira la app en el navegador.
+echo  2. Inicie sesion y vaya a Configuracion - Instalar en este equipo.
+echo  3. Para servidor local con Python use AMIRCARS.cmd opcion 2 desde el repo.
 echo.
 start "" "%URL%"
 """

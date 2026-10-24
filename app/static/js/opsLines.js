@@ -65,11 +65,23 @@ function photoCell(line, onChange) {
   });
   const thumbs = line.files.map((item, index) => {
     const url = line.previewUrls[index];
-    const chip = h("span", { class: "photo-chip", title: item.name || "Foto" }, h("img", { class: "photo-mini", src: url, alt: item.name || "Foto" }));
+    const img = h("img", { class: "photo-mini", src: url, alt: item.name || "Foto" });
+    const chip = h("span", { class: "photo-chip", title: item.name || "Foto" }, img);
     if (url) {
       bindThumb(chip, item, url);
     }
-    return chip;
+    const remove = h("button", { class: "photo-chip-remove", type: "button", "aria-label": "Quitar foto" }, "×");
+    remove.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (line.previewUrls[index]) {
+        URL.revokeObjectURL(line.previewUrls[index]);
+      }
+      line.files.splice(index, 1);
+      line.previewUrls.splice(index, 1);
+      onChange();
+    });
+    return h("span", { class: "photo-chip-wrap" }, chip, remove);
   });
   return h("div", { class: "photo-line" }, h("label", { class: "btn small ghost line-photo" }, caption, file), ...thumbs);
 }

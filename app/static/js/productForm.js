@@ -1,4 +1,4 @@
-import { createProduct, loadContext, updateProduct } from "./catalog.js";
+import { createProduct, galleryFor, loadContext, removeProductImage, safeImg, updateProduct } from "./catalog.js";
 import { h } from "./dom.js";
 import { promptCategoria, promptSubcategoria } from "./taxonomy.js?v=37";
 
@@ -49,6 +49,7 @@ export function openProductForm(existing = null) {
     const status = h("p", { class: "muted" }, "");
     let ctx = null;
     let saving = false;
+    let removingPhoto = false;
 
     const catSelect = h("select", { class: "app-select" });
     const subSelect = h("select", { class: "app-select" });
@@ -60,7 +61,47 @@ export function openProductForm(existing = null) {
     const stock = h("input", { class: "app-input", type: "number", step: "1", min: "0" });
     const stockMin = h("input", { class: "app-input", type: "number", step: "1", min: "0" });
     const files = h("input", { class: "app-input", type: "file", accept: "image/jpeg,image/png,image/webp", multiple: "multiple" });
+    const existingPhotos = h("div", { class: "photo-line form-photo-list" });
     const fieldHost = h("div");
+
+    function paintExistingPhotos() {
+      if (!existing || !ctx) {
+        existingPhotos.replaceChildren();
+        existingPhotos.hidden = true;
+        return;
+      }
+      const photos = galleryFor(existing.id, ctx);
+      if (!photos.length) {
+        existingPhotos.replaceChildren();
+        existingPhotos.hidden = true;
+        return;
+      }
+      existingPhotos.hidden = false;
+      existingPhotos.replaceChildren(
+        h("span", { class: "muted" }, "Fotos actuales (pulse × para quitar):"),
+        ...photos.map((photo) => {
+          const img = safeImg(photo.src, photo.alt || existing.descripcion, "photo-mini");
+          const remove = h("button", { class: "photo-chip-remove", type: "button", "aria-label": "Quitar foto" }, "×");
+          remove.addEventListener("click", async () => {
+            if (saving || removingPhoto) {
+              return;
+            }
+            removingPhoto = true;
+            try {
+              await removeProductImage(photo.id, existing.id);
+              ctx = await loadContext();
+              paintExistingPhotos();
+              status.textContent = "Foto quitada. Se sincronizará con la nube al subir cambios.";
+            } catch (err) {
+              status.textContent = err.message || "No se pudo quitar la foto.";
+            } finally {
+              removingPhoto = false;
+            }
+          });
+          return h("span", { class: "photo-chip-wrap" }, h("span", { class: "photo-chip" }, img), remove);
+        })
+      );
+    }
 
     codigo.value = existing?.codigo || "";
     descripcion.value = existing?.descripcion || "";
@@ -194,6 +235,7 @@ export function openProductForm(existing = null) {
         .forEach((row) => provSelect.append(h("option", { value: row.id }, `${row.codigo_proveedor} · ${row.razon_social}`)));
       provSelect.value = existing?.proveedor_id || "";
       refillSubs();
+      paintExistingPhotos();
     });
 
     catSelect.addEventListener("change", refillSubs);
@@ -213,7 +255,7 @@ export function openProductForm(existing = null) {
       h("label", { class: "field-row" }, "Precio venta REF", refVenta),
       existing ? h("p", { class: "muted" }, `Stock actual: ${existing.stock}. Las entradas de mercancía se registran en Entradas.`) : h("label", { class: "field-row" }, "Stock inicial", stock),
       h("label", { class: "field-row" }, "Stock mínimo", stockMin),
-      h("label", { class: "field-row span-2" }, "Fotos opcionales (JPEG, PNG o WEBP, máx. 5MB)", files),
+      h("label", { class: "field-row span-2" }, "Fotos opcionales (JPEG, PNG o WEBP, máx. 5MB)", existingPhotos, files),
       fieldHost
     );
 

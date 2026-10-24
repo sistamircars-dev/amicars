@@ -1,8 +1,9 @@
 const LABELS = {
-  synced: "Sincronizado",
+  connected: "Conectado",
   syncing: "Sincronizando…",
-  offline: "Modo Offline",
-  retry: "Reintentar Sincronización",
+  offline: "Offline",
+  pending: "Pendiente de subir",
+  retry: "Reintentar sincronización",
   unknown: "Iniciando…",
 };
 
@@ -15,7 +16,10 @@ export function setSyncStatus(state, extra = "") {
   const label = root.querySelector(".sync-label");
   let text = LABELS[state] || LABELS.unknown;
   if (state === "offline" && extra) {
-    text = `Modo Offline (${extra} cambios guardados localmente)`;
+    text = `Offline (${extra} cambios guardados localmente)`;
+  }
+  if (state === "pending" && extra) {
+    text = `${extra} cambio${extra === "1" ? "" : "s"} por subir`;
   }
   if (label) {
     label.textContent = text;
@@ -23,7 +27,15 @@ export function setSyncStatus(state, extra = "") {
   const icon = root.querySelector(".sync-icon");
   if (icon) {
     icon.textContent =
-      state === "synced" ? "🟢" : state === "syncing" ? "🔄" : state === "retry" ? "🔴" : "🟠";
+      state === "connected"
+        ? "🟢"
+        : state === "syncing"
+          ? "🔄"
+          : state === "offline"
+            ? "🟠"
+            : state === "pending"
+              ? "🟡"
+              : "🔴";
   }
 }
 
@@ -33,7 +45,8 @@ export function bindRetry(handler) {
     return;
   }
   root.addEventListener("click", () => {
-    if (root.dataset.state === "retry" || root.dataset.state === "offline") {
+    const state = root.dataset.state;
+    if (state === "retry" || state === "offline" || state === "pending") {
       handler();
     }
   });
