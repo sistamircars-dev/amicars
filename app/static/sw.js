@@ -1,4 +1,4 @@
-const CACHE = "amircars-offline-v35";
+const CACHE = "amircars-offline-v36";
 const PRECACHE = [
   "/offline.html",
   "/manifest.json",
@@ -43,6 +43,8 @@ const PRECACHE = [
   "/static/css/app.css?v=17",
   "/static/css/catalog.css?v=27",
   "/static/img/amircars/logo.png",
+  "/static/img/amircars/pwa-icon-192.png",
+  "/static/img/amircars/pwa-icon-512.png",
   "/static/img/amircars/fondo.jpg?v=14",
 ];
 

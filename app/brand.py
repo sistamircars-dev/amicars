@@ -49,6 +49,30 @@ def find_amircars_folder() -> Path | None:
     return None
 
 
+def rebuild_pwa_icons(dest_dir: Path) -> None:
+    try:
+        from PIL import Image
+    except ImportError:
+        return
+    logo_path = None
+    for name in ("logo.png", "logo.jpg", "logo.jpeg", "logo.webp"):
+        candidate = dest_dir / name
+        if candidate.is_file():
+            logo_path = candidate
+            break
+    if logo_path is None:
+        return
+    img = Image.open(logo_path)
+    for size in (192, 512):
+        canvas = Image.new("RGBA", (size, size), (11, 12, 16, 255))
+        copy = img.convert("RGBA")
+        copy.thumbnail((size, size), Image.Resampling.LANCZOS)
+        x = (size - copy.width) // 2
+        y = (size - copy.height) // 2
+        canvas.paste(copy, (x, y), copy)
+        canvas.save(dest_dir / f"pwa-icon-{size}.png", "PNG")
+
+
 def copy_brand_assets(dest_dir: Path) -> dict[str, str]:
     dest_dir.mkdir(parents=True, exist_ok=True)
     source = find_amircars_folder()
@@ -65,6 +89,11 @@ def copy_brand_assets(dest_dir: Path) -> dict[str, str]:
             shutil.copy2(src, target)
             copied[name] = str(target)
             break
+    if "logo" in copied:
+        try:
+            rebuild_pwa_icons(dest_dir)
+        except Exception:
+            pass
     return copied
 
 
