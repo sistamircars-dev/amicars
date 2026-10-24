@@ -1,4 +1,5 @@
-# AMIRCARS en Render — conecta el repo GitHub y define secretos en el panel.
+# AMIRCARS en Render — https://amircars.onrender.com
+# Start command recomendado (Settings): gunicorn --config gunicorn.conf.py wsgi:app
 services:
   - type: web
     name: amircars

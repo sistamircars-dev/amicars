@@ -6,6 +6,7 @@ from app.brand import apply_brand_assets
 from app.config import Config
 from app.extensions import csrf, limiter, talisman
 from app.security import apply_security_headers, is_blocked_path, register_csp
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 def create_app(config_class: type[Config] = Config) -> Flask:
@@ -90,3 +91,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
         return jsonify({"ok": False, "error": "Error interno"}), 500
 
     return app
+
+
+app = create_app()
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
