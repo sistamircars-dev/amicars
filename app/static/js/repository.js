@@ -1,7 +1,13 @@
 import { db, newId, nowIso } from "./db.js";
 
+const SYNC_STRIP = new Set(["local_blob", "thumbnail_url", "blob"]);
+
 function cloneRecord(record) {
-  return JSON.parse(JSON.stringify(record));
+  const copy = { ...record };
+  SYNC_STRIP.forEach((key) => {
+    delete copy[key];
+  });
+  return JSON.parse(JSON.stringify(copy));
 }
 
 export async function enqueue(table, op, record) {

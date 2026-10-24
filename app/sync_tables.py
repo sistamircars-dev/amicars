@@ -18,9 +18,7 @@ TABLE_ORDER = (
 
 IMMUTABLE_TABLES = frozenset({"movimientos_inventario"})
 
-STRIP_ON_PUSH = {
-    "productos": frozenset({"stock"}),
-}
+STRIP_ON_PUSH: dict[str, frozenset[str]] = {}
 
 COLUMNS: dict[str, frozenset[str]] = {
     "categorias": frozenset(

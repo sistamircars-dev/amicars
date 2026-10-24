@@ -92,7 +92,8 @@ async function flushQueue() {
       }
     }
     if ((result.data.rejected || []).length && done.size === 0) {
-      throw new Error("El servidor rechazó el lote de sincronización");
+      const detail = (result.data.rejected[0] && result.data.rejected[0].error) || "";
+      throw new Error(detail || "El servidor rechazó el lote de sincronización");
     }
   }
 }
@@ -147,7 +148,10 @@ export async function runSync(force = false) {
     if (!alive) {
       throw new Error("Sin heartbeat");
     }
-    await refreshSession();
+    const session = await refreshSession();
+    if (!session.ok) {
+      throw new Error("Sesión expirada; vuelva a entrar.");
+    }
     await flushMedia();
     await flushQueue();
     await pullRemote();

@@ -34,6 +34,18 @@ async function request(url, options = {}) {
   return { ok: response.ok, status: response.status, data };
 }
 
+async function requestAuth(url, options = {}) {
+  let result = await request(url, options);
+  if (result.status !== 401) {
+    return result;
+  }
+  const renewed = await refreshSession();
+  if (!renewed.ok) {
+    return result;
+  }
+  return request(url, options);
+}
+
 export async function healthCheck() {
   try {
     const result = await request("/api/health");
@@ -64,22 +76,22 @@ export async function refreshSession() {
 }
 
 export async function purgeArchived(items) {
-  return request("/api/archive/purge", { method: "POST", json: { items } });
+  return requestAuth("/api/archive/purge", { method: "POST", json: { items } });
 }
 
 export async function pushQueue(items) {
-  return request("/api/sync/push", { method: "POST", json: { items } });
+  return requestAuth("/api/sync/push", { method: "POST", json: { items } });
 }
 
 export async function pullChanges(since) {
   const query = since ? `?since=${encodeURIComponent(since)}` : "";
-  return request(`/api/sync/pull${query}`);
+  return requestAuth(`/api/sync/pull${query}`);
 }
 
 export async function uploadMediaBlob(blob, filename) {
   const form = new FormData();
   form.append("file", blob, filename || "pieza.jpg");
-  return request("/api/media/upload", { method: "POST", body: form });
+  return requestAuth("/api/media/upload", { method: "POST", body: form });
 }
 
 export async function fetchBcvToday() {

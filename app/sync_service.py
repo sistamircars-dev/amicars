@@ -91,8 +91,9 @@ def apply_push(raw: dict[str, Any]) -> dict[str, Any]:
         except Exception as exc:
             rejected.append({"id": item.id, "error": str(exc)[:280]})
 
+    progressed = len(accepted) + len(duplicates)
     return {
-        "ok": len(rejected) == 0,
+        "ok": progressed > 0 or not body.items,
         "accepted": accepted,
         "duplicates": duplicates,
         "rejected": rejected,
