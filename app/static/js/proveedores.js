@@ -1,7 +1,15 @@
 import { matchesQuery, requestRestock } from "./catalog.js";
 import { db } from "./db.js";
 import { h } from "./dom.js";
-import { backfillSupplierLinks, formatDisplayDate } from "./movements.js?v=36";
+import {
+  backfillSupplierLinks,
+  editEntradaFactura,
+  formatDisplayDate,
+  groupEntradaFacturas,
+  voidEntradaFactura,
+} from "./movements.js?v=49";
+import { createDateField } from "./dateField.js?v=34";
+import { promptJustification } from "./promptJustification.js?v=49";
 import { openProductForm } from "./productForm.js?v=37";
 import { deactivateLocal, hardDeleteLocal, saveLocal } from "./repository.js";
 
@@ -67,6 +75,7 @@ export async function renderProveedores(root) {
   let minsEditingId = null;
   let query = "";
   let refreshToken = 0;
+  let supplierDetailTab = "productos";
 
   function paintChips(rows) {
     const dictionary = supplierWords(rows);
@@ -116,7 +125,105 @@ export async function renderProveedores(root) {
     return "—";
   }
 
-  function detailNodes(row, productos, links, moves, solicitudes) {
+  function openEditFactura(group) {
+    const back = h("div", { class: "modal-back" });
+    const box = h("div", { class: "glass modal wide" });
+    const numero = h("input", { class: "app-input" });
+    const llegada = createDateField({ value: group.fecha_llegada || group.fecha, ariaLabel: "Fecha de llegada" });
+    const statusModal = h("p", { class: "muted" }, "");
+    numero.value = group.numero_factura || "";
+    const cancel = h("button", { class: "btn ghost", type: "button" }, "Cancelar");
+    const save = h("button", { class: "btn", type: "button" }, "Guardar cambios");
+    cancel.addEventListener("click", () => back.remove());
+    back.addEventListener("click", (event) => {
+      if (event.target === back) {
+        back.remove();
+      }
+    });
+    save.addEventListener("click", async () => {
+      const just = await promptJustification("Editar factura", "Justifique el cambio de número o fecha de llegada.");
+      if (!just) {
+        return;
+      }
+      try {
+        await editEntradaFactura(group.key, {
+          numeroFactura: numero.value.trim(),
+          fechaLlegada: llegada.value,
+          justification: just,
+        });
+        status.textContent = "Factura actualizada.";
+        back.remove();
+        refresh();
+      } catch (err) {
+        statusModal.textContent = err.message || "No se pudo guardar.";
+      }
+    });
+    box.append(
+      h("h3", {}, "Editar factura"),
+      h("p", { class: "muted" }, `${group.lineas.length} línea(s) · ${formatDisplayDate(group.fecha)}`),
+      h("div", { class: "form-grid" }, h("label", { class: "field-row" }, "Número de factura", numero), h("label", { class: "field-row" }, "Fecha de llegada", llegada)),
+      statusModal,
+      h("div", { class: "modal-actions" }, cancel, save)
+    );
+    back.append(box);
+    document.body.append(back);
+    numero.focus();
+  }
+
+  function facturasTab(row, moves, allMoves) {
+    const groups = groupEntradaFacturas(moves, row.id, allMoves);
+    if (!groups.length) {
+      return h("p", { class: "muted" }, "No hay facturas de entrada registradas para este proveedor.");
+    }
+    return h(
+      "div",
+      { class: "table-wrap" },
+      h(
+        "table",
+        { class: "data-table" },
+        h("thead", {}, h("tr", {}, h("th", {}, "Factura"), h("th", {}, "Llegada"), h("th", {}, "Fecha registro"), h("th", {}, "Ítems"), h("th", {}, "REF"), h("th", {}, ""))),
+        h(
+          "tbody",
+          {},
+          ...groups.map((group) => {
+            const totalRef = group.lineas.reduce((sum, line) => sum + Number(line.monto_ref || 0), 0);
+            const edit = h("button", { class: "btn small ghost", type: "button" }, "Editar");
+            edit.addEventListener("click", (event) => {
+              event.stopPropagation();
+              openEditFactura(group);
+            });
+            const cancel = h("button", { class: "btn small danger", type: "button" }, "Anular");
+            cancel.addEventListener("click", async (event) => {
+              event.stopPropagation();
+              const just = await promptJustification(`Anular factura ${group.numero_factura || ""}`.trim());
+              if (!just) {
+                return;
+              }
+              try {
+                await voidEntradaFactura(group.key, just);
+                status.textContent = "Factura anulada.";
+                refresh();
+              } catch (err) {
+                status.textContent = err.message || "No se pudo anular.";
+              }
+            });
+            return h(
+              "tr",
+              {},
+              h("td", {}, group.numero_factura || "—"),
+              h("td", {}, formatDisplayDate(group.fecha_llegada)),
+              h("td", {}, formatDisplayDate(group.fecha)),
+              h("td", {}, String(group.lineas.length)),
+              h("td", {}, totalRef.toFixed(2)),
+              h("td", {}, edit, cancel)
+            );
+          })
+        )
+      )
+    );
+  }
+
+  function detailNodes(row, productos, links, moves, solicitudes, allMoves) {
     const rowLinks = links.filter((link) => link.proveedor_id === row.id && link.is_active !== false);
     const shown = new Map();
     productos
@@ -169,10 +276,19 @@ export async function renderProveedores(root) {
       status.textContent = "Stock mínimo registrado.";
       refresh();
     });
-    return h(
-      "div",
-      { class: "supplier-detail" },
-      h("div", { class: "supplier-detail-head" }, h("h3", {}, "Productos de las facturas"), saveMins),
+    const tabProductos = h("button", { class: supplierDetailTab === "productos" ? "btn small" : "btn small ghost", type: "button" }, "Productos");
+    const tabFacturas = h("button", { class: supplierDetailTab === "facturas" ? "btn small" : "btn small ghost", type: "button" }, "Histórico facturas");
+    tabProductos.addEventListener("click", (event) => {
+      event.stopPropagation();
+      supplierDetailTab = "productos";
+      refresh();
+    });
+    tabFacturas.addEventListener("click", (event) => {
+      event.stopPropagation();
+      supplierDetailTab = "facturas";
+      refresh();
+    });
+    const productosPanel =
       items.length
         ? h(
             "div",
@@ -242,7 +358,12 @@ export async function renderProveedores(root) {
               )
             )
           )
-        : h("p", { class: "muted" }, "Todavía no hay productos cargados en facturas de este proveedor.")
+        : h("p", { class: "muted" }, "Todavía no hay productos cargados en facturas de este proveedor.");
+    return h(
+      "div",
+      { class: "supplier-detail" },
+      h("div", { class: "supplier-detail-head" }, h("div", { class: "supplier-tabs" }, tabProductos, tabFacturas), supplierDetailTab === "productos" ? saveMins : null),
+      supplierDetailTab === "facturas" ? facturasTab(row, moves, allMoves) : productosPanel
     );
   }
 
@@ -362,7 +483,11 @@ export async function renderProveedores(root) {
         if (event.target.closest("button, a, input, select, textarea")) {
           return;
         }
-        expandedId = expandedId === row.id ? null : row.id;
+        const next = expandedId === row.id ? null : row.id;
+        if (next !== expandedId) {
+          supplierDetailTab = "productos";
+        }
+        expandedId = next;
         if (expandedId !== row.id) {
           minsEditingId = null;
         }
@@ -370,7 +495,7 @@ export async function renderProveedores(root) {
       });
       rows.push(tr);
       if (open) {
-        rows.push(h("tr", { class: "supplier-detail-row" }, h("td", { colspan: "5" }, detailNodes(row, productos, links, moves, solicitudes))));
+        rows.push(h("tr", { class: "supplier-detail-row" }, h("td", { colspan: "5" }, detailNodes(row, productos, links, moves, solicitudes, moves))));
       }
     });
     listHost.replaceChildren(

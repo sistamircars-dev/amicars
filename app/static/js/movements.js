@@ -1,7 +1,268 @@
 import { num, writeHistorico } from "./catalog.js";
-import { db, getMeta, newId, setMeta } from "./db.js";
-import { saveLocal } from "./repository.js";
+import { db, getMeta, newId, nowIso, setMeta } from "./db.js";
+import { patchMovementLocal, saveLocal } from "./repository.js";
 import { getConfig, getTasa } from "./store.js";
+
+export function movePayload(move) {
+  return move.payload && typeof move.payload === "object" ? move.payload : {};
+}
+
+export function isMoveVoided(move, allMoves) {
+  const payload = movePayload(move);
+  if (payload.anulado) {
+    return true;
+  }
+  if (!allMoves || !allMoves.length) {
+    return false;
+  }
+  return allMoves.some((row) => movePayload(row).anula_movimiento_id === move.id);
+}
+
+export function entradaLoteKey(move) {
+  const payload = movePayload(move);
+  if (payload.lote_id) {
+    return payload.lote_id;
+  }
+  return `${move.proveedor_id || ""}|${payload.numero_factura || ""}|${payload.fecha_llegada || move.fecha}|${move.fecha}`;
+}
+
+export function groupEntradaFacturas(moves, proveedorId, allMoves = moves) {
+  const groups = new Map();
+  for (const move of moves) {
+    if (move.tipo !== "entrada" || move.proveedor_id !== proveedorId) {
+      continue;
+    }
+    if (isMoveVoided(move, allMoves)) {
+      continue;
+    }
+    const key = entradaLoteKey(move);
+    if (!groups.has(key)) {
+      const payload = movePayload(move);
+      groups.set(key, {
+        key,
+        lote_id: payload.lote_id || key,
+        numero_factura: payload.numero_factura || "",
+        fecha_llegada: payload.fecha_llegada || move.fecha,
+        fecha: move.fecha,
+        lineas: [],
+      });
+    }
+    groups.get(key).lineas.push(move);
+  }
+  return [...groups.values()].sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+}
+
+async function reverseEntradaLine(move, justification) {
+  const product = await db.productos.get(move.producto_id);
+  if (!product) {
+    throw new Error("Producto no encontrado para anular la entrada.");
+  }
+  const qty = num(move.cantidad);
+  if (num(product.stock) < qty) {
+    throw new Error(`No hay stock suficiente para anular ${move.descripcion || product.descripcion}.`);
+  }
+  const voidId = newId();
+  await saveLocal("movimientos_inventario", {
+    id: voidId,
+    tipo: "salida",
+    fecha: todayLocal(),
+    producto_id: product.id,
+    cantidad: qty,
+    cliente_nombre: "Anulación de entrada",
+    cliente_documento: "",
+    motivo: justification,
+    ref_unitario: num(move.ref_unitario),
+    tasa_bcv: move.tasa_bcv ?? null,
+    monto_ref: move.monto_ref ?? qty * num(move.ref_unitario),
+    monto_bs: move.monto_bs ?? null,
+    descripcion: product.descripcion,
+    caracteristicas: product.atributos || {},
+    payload: {
+      origen: "anulacion",
+      anula_movimiento_id: move.id,
+      anula_tipo: "entrada",
+      justificacion: justification,
+    },
+    is_active: true,
+  });
+  await saveLocal("productos", { ...product, stock: num(product.stock) - qty });
+  await patchMovementLocal(move.id, {
+    payload: {
+      anulado: true,
+      justificacion_anulacion: justification,
+      anulado_at: nowIso(),
+      anula_movimiento_id: voidId,
+    },
+  });
+}
+
+async function reverseSalidaLine(move, justification, correlativo) {
+  const product = await db.productos.get(move.producto_id);
+  if (!product) {
+    throw new Error("Producto no encontrado para anular la salida.");
+  }
+  const qty = num(move.cantidad);
+  const voidId = newId();
+  await saveLocal("movimientos_inventario", {
+    id: voidId,
+    tipo: "entrada",
+    fecha: todayLocal(),
+    producto_id: product.id,
+    cantidad: qty,
+    proveedor_id: move.proveedor_id || null,
+    codigo_proveedor: move.codigo_proveedor || "",
+    nombre_proveedor: move.nombre_proveedor || "",
+    ref_unitario: num(move.ref_unitario),
+    tasa_bcv: move.tasa_bcv ?? null,
+    monto_ref: move.monto_ref ?? qty * num(move.ref_unitario),
+    monto_bs: move.monto_bs ?? null,
+    descripcion: product.descripcion,
+    caracteristicas: product.atributos || {},
+    payload: {
+      origen: "anulacion",
+      anula_movimiento_id: move.id,
+      anula_tipo: "salida",
+      justificacion: justification,
+      correlativo_anulado: correlativo || move.correlativo_salida || "",
+    },
+    is_active: true,
+  });
+  await saveLocal("productos", { ...product, stock: num(product.stock) + qty });
+  await patchMovementLocal(move.id, {
+    payload: {
+      anulado: true,
+      justificacion_anulacion: justification,
+      anulado_at: nowIso(),
+      anula_movimiento_id: voidId,
+    },
+  });
+}
+
+export async function voidEntradaFactura(loteKey, justification) {
+  const all = await db.movimientos_inventario.toArray();
+  const lines = all.filter((move) => move.tipo === "entrada" && entradaLoteKey(move) === loteKey);
+  if (!lines.length) {
+    throw new Error("No se encontró la factura de entrada.");
+  }
+  const active = lines.filter((move) => !isMoveVoided(move, all));
+  if (!active.length) {
+    throw new Error("Esa factura ya está anulada.");
+  }
+  for (const move of active) {
+    await reverseEntradaLine(move, justification);
+  }
+  return active.length;
+}
+
+export async function voidSalidaTicket(correlativo, justification) {
+  const wanted = String(correlativo || "").trim();
+  if (!wanted) {
+    throw new Error("Indique el número de salida.");
+  }
+  const all = await db.movimientos_inventario.toArray();
+  const lines = all.filter((move) => move.tipo === "salida" && String(move.correlativo_salida || "").trim() === wanted);
+  if (!lines.length) {
+    throw new Error("No se encontró ese ticket de salida.");
+  }
+  const active = lines.filter((move) => !isMoveVoided(move, all));
+  if (!active.length) {
+    throw new Error("Esa salida ya está anulada.");
+  }
+  for (const move of active) {
+    await reverseSalidaLine(move, justification, wanted);
+  }
+  return active.length;
+}
+
+export async function editEntradaFactura(loteKey, { numeroFactura, fechaLlegada, justification }) {
+  const just = String(justification || "").trim();
+  if (just.length < 3) {
+    throw new Error("Indique la justificación de la edición.");
+  }
+  const all = await db.movimientos_inventario.toArray();
+  const lines = all.filter((move) => move.tipo === "entrada" && entradaLoteKey(move) === loteKey);
+  if (!lines.length) {
+    throw new Error("No se encontró la factura.");
+  }
+  if (lines.some((move) => isMoveVoided(move, all))) {
+    throw new Error("No se puede editar una factura anulada.");
+  }
+  const numero = String(numeroFactura ?? "").trim();
+  const llegada = String(fechaLlegada ?? "").trim();
+  if (!numero) {
+    throw new Error("Indique el número de factura.");
+  }
+  if (!llegada) {
+    throw new Error("Indique la fecha de llegada.");
+  }
+  const stamp = nowIso();
+  for (const move of lines) {
+    const payload = movePayload(move);
+    const historial = Array.isArray(payload.historial_ediciones) ? payload.historial_ediciones.slice() : [];
+    historial.push({
+      at: stamp,
+      justificacion: just,
+      antes: {
+        numero_factura: payload.numero_factura || "",
+        fecha_llegada: payload.fecha_llegada || move.fecha,
+      },
+      despues: { numero_factura: numero, fecha_llegada: llegada },
+    });
+    await patchMovementLocal(move.id, {
+      payload: {
+        numero_factura: numero,
+        fecha_llegada: llegada,
+        historial_ediciones: historial,
+        ultima_edicion: stamp,
+        ultima_justificacion_edicion: just,
+      },
+    });
+  }
+  return lines.length;
+}
+
+export async function buildSalidaTicket(correlativo) {
+  const wanted = String(correlativo || "").trim();
+  const all = await db.movimientos_inventario.toArray();
+  const lines = all
+    .filter((move) => move.tipo === "salida" && String(move.correlativo_salida || "").trim() === wanted)
+    .filter((move) => !isMoveVoided(move, all));
+  if (!lines.length) {
+    throw new Error("No hay líneas activas para ese ticket.");
+  }
+  const head = lines[0];
+  const ticketLines = lines.map((move) => ({
+    descripcion: move.descripcion || "",
+    cantidad: num(move.cantidad),
+    refUnit: num(move.ref_unitario),
+    montoRef: num(move.monto_ref),
+    montoBs: move.monto_bs === null || move.monto_bs === undefined ? null : num(move.monto_bs),
+  }));
+  return {
+    correlativo: wanted,
+    fecha: head.fecha,
+    cliente: head.cliente_nombre || "",
+    documento: head.cliente_documento || "",
+    tasa: head.tasa_bcv ? num(head.tasa_bcv) : 0,
+    lines: ticketLines,
+    reimpresion: true,
+  };
+}
+
+export async function listSalidaCorrelativos(limit = 80) {
+  const all = await db.movimientos_inventario.filter((row) => row.tipo === "salida").toArray();
+  const seen = new Map();
+  for (const move of all) {
+    const key = String(move.correlativo_salida || "").trim();
+    if (!key || isMoveVoided(move, all)) {
+      continue;
+    }
+    if (!seen.has(key)) {
+      seen.set(key, { correlativo: key, fecha: move.fecha, cliente: move.cliente_nombre || "" });
+    }
+  }
+  return [...seen.values()].sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).slice(0, limit);
+}
 
 export async function effectiveMinimum(product) {
   if (product.stock_minimo !== null && product.stock_minimo !== undefined && product.stock_minimo !== "") {
@@ -147,6 +408,7 @@ export async function registerEntrada({ fecha, proveedor, items, tasa, numeroFac
     throw new Error("Agregue al menos un ítem.");
   }
   const rate = tasa ? num(tasa.usd_ves) : 0;
+  const loteId = newId();
   for (const item of items) {
     const product = await resolveEntradaProduct(item, proveedor);
     item.producto_id = product.id;
@@ -181,6 +443,7 @@ export async function registerEntrada({ fecha, proveedor, items, tasa, numeroFac
       caracteristicas: atributos,
       payload: {
         origen: "entrada",
+        lote_id: loteId,
         numero_factura: String(numeroFactura || "").trim(),
         fecha_llegada: fechaLlegada || fecha,
       },

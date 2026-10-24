@@ -3,7 +3,7 @@ import { createCombo } from "./combo.js";
 import { createDateField } from "./dateField.js?v=34";
 import { db } from "./db.js";
 import { h } from "./dom.js";
-import { formatDisplayDate, formatRate, registerEntrada, tasaFor, todayLocal } from "./movements.js?v=36";
+import { formatDisplayDate, formatRate, registerEntrada, tasaFor, todayLocal } from "./movements.js?v=49";
 import { mountLines } from "./opsLines.js?v=40";
 import { saveLocal } from "./repository.js";
 import { mountCampoEditor, retireCampo } from "./taxonomy.js?v=36";

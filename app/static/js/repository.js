@@ -73,6 +73,21 @@ export async function hardDeleteLocal(table, id) {
   return existing;
 }
 
+/** Actualiza un movimiento solo en Dexie (no encola sync: la bitácora remota es insert-only). */
+export async function patchMovementLocal(id, patch = {}) {
+  const existing = await db.movimientos_inventario.get(id);
+  if (!existing) {
+    return null;
+  }
+  const next = { ...existing, ...patch, updated_at: nowIso() };
+  if (patch.payload && typeof patch.payload === "object") {
+    const base = existing.payload && typeof existing.payload === "object" ? existing.payload : {};
+    next.payload = { ...base, ...patch.payload };
+  }
+  await db.movimientos_inventario.put(next);
+  return next;
+}
+
 export async function queueOfflineImage(productoId, blob, filename, extra = {}) {
   const item = {
     id: extra.id || newId(),

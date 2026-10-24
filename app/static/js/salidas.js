@@ -3,7 +3,7 @@ import { clientComboOptions, loadRegisteredClients } from "./clients.js?v=48";
 import { createDateField } from "./dateField.js?v=34";
 import { db } from "./db.js";
 import { h } from "./dom.js";
-import { formatDisplayDate, formatRate, registerSalida, tasaFor, todayLocal } from "./movements.js";
+import { buildSalidaTicket, formatDisplayDate, formatRate, listSalidaCorrelativos, registerSalida, tasaFor, todayLocal } from "./movements.js?v=49";
 import { getRouteParams } from "./nav.js";
 import { mountLines } from "./opsLines.js?v=48";
 
@@ -80,6 +80,31 @@ function findClient(clients, id) {
 export async function renderSalidas(root) {
   const fecha = createDateField({ value: todayLocal(), ariaLabel: "Fecha" });
   const status = h("p", { class: "muted" }, "");
+  const reprintStatus = h("p", { class: "muted" }, "");
+  let correlativos = await listSalidaCorrelativos();
+  const correlativoCombo = createCombo({
+    options: correlativos.map((row) => ({
+      value: row.correlativo,
+      label: `${row.correlativo} · ${formatDisplayDate(row.fecha)} · ${row.cliente || "Cliente"}`,
+      search: `${row.correlativo} ${row.cliente} ${row.fecha}`,
+    })),
+    placeholder: "Buscar ticket S-000001…",
+    ariaLabel: "Ticket de salida",
+  });
+  const reprintBtn = h("button", { class: "btn ghost", type: "button" }, "Reimprimir ticket");
+  reprintBtn.addEventListener("click", async () => {
+    const picked = correlativoCombo.getValue() || correlativoCombo.input.value.trim();
+    if (!picked) {
+      reprintStatus.textContent = "Elija o escriba el número de salida.";
+      return;
+    }
+    try {
+      printTicket(await buildSalidaTicket(picked));
+      reprintStatus.textContent = `Ticket ${picked} enviado a impresión.`;
+    } catch (err) {
+      reprintStatus.textContent = err.message || "No se pudo reimprimir.";
+    }
+  });
   const linesHost = h("div");
   let items = [];
   let tasa = await tasaFor(fecha.value);
@@ -174,6 +199,14 @@ export async function renderSalidas(root) {
       });
       status.textContent = `Salida ${lastTicket.correlativo} registrada.`;
       printTicket(lastTicket);
+      correlativos = await listSalidaCorrelativos();
+      correlativoCombo.setOptions(
+        correlativos.map((row) => ({
+          value: row.correlativo,
+          label: `${row.correlativo} · ${formatDisplayDate(row.fecha)} · ${row.cliente || "Cliente"}`,
+          search: `${row.correlativo} ${row.cliente} ${row.fecha}`,
+        }))
+      );
       clients = await loadRegisteredClients();
       const nameOpts = clientComboOptions(clients);
       clienteCombo.setOptions(nameOpts);
@@ -205,7 +238,8 @@ export async function renderSalidas(root) {
     rateLabel,
     linesHost,
     h("div", { class: "toolbar" }, save, printLast),
-    status
+    status,
+    h("div", { class: "glass sheet-compact reprint-block" }, h("h3", {}, "Reimprimir ticket"), h("p", { class: "muted" }, "Busque una salida anterior activa (no anulada)."), correlativoCombo.element, h("div", { class: "toolbar" }, reprintBtn), reprintStatus)
   );
   paintLines();
 }

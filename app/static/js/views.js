@@ -4,8 +4,8 @@ import { renderEntradas } from "./entradas.js?v=48";
 import { renderFallas } from "./fallas.js?v=40";
 import { renderInventory } from "./inventory.js?v=42";
 import { renderPedidos } from "./pedidos.js?v=40";
-import { renderProveedores } from "./proveedores.js?v=37";
-import { renderSalidas } from "./salidas.js?v=48";
+import { renderProveedores } from "./proveedores.js?v=49";
+import { renderSalidas } from "./salidas.js?v=49";
 import { renderTaxonomy } from "./taxonomy.js?v=37";
 
 export const VIEWS = {

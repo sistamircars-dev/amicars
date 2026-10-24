@@ -248,6 +248,27 @@
   margin-bottom: 0.45rem;
 }
 
+.supplier-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.bitacora-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+tr.move-voided td {
+  opacity: 0.55;
+}
+
+.reprint-block {
+  margin-top: 1rem;
+}
+
 .supplier-detail-head h3 {
   margin: 0;
 }
