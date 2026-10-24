@@ -218,13 +218,14 @@ export async function attachPhotos(productoId, files) {
     const id = newId();
     let stored = false;
     if (navigator.onLine) {
-      const result = await uploadMediaBlob(file, file.name);
+      const result = await uploadMediaBlob(file, file.name, id);
       if (result.ok && result.data && result.data.ok) {
         await saveLocal("producto_imagenes", {
           id,
           producto_id: productoId,
           cloudinary_url: result.data.url,
           cloudinary_public_id: result.data.public_id,
+          thumbnail_url: result.data.thumbnail_url || "",
           alt_text: file.name,
           orden,
           is_cover: needsCover,

@@ -5,10 +5,16 @@ from app.extensions import limiter
 bp = Blueprint("pwa", __name__)
 
 _INSTALL_CMD = """@echo off
-echo AMIRCARS
-echo Esta PC no necesita Node ni Python.
-echo Abre la aplicacion instalada en el navegador; sin internet guarda en este equipo.
-start "" "{origin}/"
+chcp 65001 >nul
+set "URL={origin}/"
+echo.
+echo  AMIRCARS - Instalacion en este equipo
+echo  No necesita Node ni Python.
+echo  1. Abra la URL, inicie sesion.
+echo  2. Configuracion - Instalar en este equipo.
+echo  3. Sin internet: abra la app instalada; guarda en local.
+echo.
+start "" "%URL%"
 """
 
 

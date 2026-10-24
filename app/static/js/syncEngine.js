@@ -31,7 +31,7 @@ async function refreshOfflineBadge() {
 async function flushMedia() {
   const pending = await db.offline_media_queue.orderBy("created_at").toArray();
   for (const item of pending) {
-    const result = await uploadMediaBlob(item.blob, item.filename);
+    const result = await uploadMediaBlob(item.blob, item.filename, item.id);
     if (!result.ok || !result.data || !result.data.ok) {
       await db.offline_media_queue.update(item.id, {
         attempts: (item.attempts || 0) + 1,
@@ -53,7 +53,8 @@ async function flushMedia() {
       is_active: true,
       thumbnail_url: result.data.thumbnail_url,
     };
-    await saveLocal("producto_imagenes", imageRow, "insert");
+    const exists = await db.producto_imagenes.get(item.id);
+    await saveLocal("producto_imagenes", imageRow, exists ? "update" : "insert");
     await db.offline_media_queue.delete(item.id);
   }
 }

@@ -33,6 +33,8 @@ def upload_image_bytes(raw: bytes, public_id: str | None = None) -> dict[str, An
     if public_id:
         options["public_id"] = public_id
         options["unique_filename"] = False
+        options["overwrite"] = True
+        options["invalidate"] = True
     result = cloudinary.uploader.upload(io.BytesIO(raw), **options)
     pid = result["public_id"]
     thumb, _ = cloudinary_url(

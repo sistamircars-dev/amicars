@@ -88,9 +88,12 @@ export async function pullChanges(since) {
   return requestAuth(`/api/sync/pull${query}`);
 }
 
-export async function uploadMediaBlob(blob, filename) {
+export async function uploadMediaBlob(blob, filename, imageId = null) {
   const form = new FormData();
   form.append("file", blob, filename || "pieza.jpg");
+  if (imageId) {
+    form.append("image_id", imageId);
+  }
   return requestAuth("/api/media/upload", { method: "POST", body: form });
 }
 
