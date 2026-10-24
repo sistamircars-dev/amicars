@@ -53,3 +53,11 @@ def upload_image_bytes(raw: bytes, public_id: str | None = None) -> dict[str, An
         "width": result.get("width"),
         "height": result.get("height"),
     }
+
+
+def destroy_image(public_id: str) -> bool:
+    if not public_id:
+        return False
+    _configure()
+    result = cloudinary.uploader.destroy(public_id, invalidate=True, resource_type="image")
+    return str(result.get("result") or "").lower() in {"ok", "not found"}

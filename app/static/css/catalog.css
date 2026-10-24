@@ -142,6 +142,22 @@
   }
 }
 
+.inv-toolbar {
+  width: 100%;
+}
+
+.inv-toolbar .category-select,
+.inv-toolbar .inv-filter {
+  width: auto;
+  min-width: 12rem;
+  max-width: 18rem;
+  flex: 1 1 12rem;
+}
+
+.report-actions {
+  margin-left: auto;
+}
+
 .toolbar,
 .filter-checks,
 .filter-inputs {
@@ -174,6 +190,11 @@
 .inv-group h3,
 .inv-sub h4 {
   margin: 0.4rem 0;
+}
+
+.inv-untitled {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
 }
 
 .inv-group.inactive {
@@ -217,6 +238,46 @@
 
 .supplier-detail h3 {
   margin: 0.2rem 0 0.6rem;
+}
+
+.supplier-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}
+
+.supplier-detail-head h3 {
+  margin: 0;
+}
+
+.order-ask-cell {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.order-ask-cell .btn + .btn {
+  margin-left: 0.35rem;
+}
+
+.ops-table .code-input,
+.ops-table .code-combo {
+  width: 8.5rem;
+  min-width: 7rem;
+}
+
+.ops-table .code-combo .combo-input {
+  width: 100%;
+}
+
+.order-summary {
+  margin: 0.2rem 0 0.75rem;
+}
+
+.order-qty {
+  width: 5.5rem;
 }
 
 .mosaic {
@@ -420,9 +481,40 @@
   grid-column: 1 / -1;
 }
 
-.date-readout {
-  color: var(--muted);
-  font-size: 0.85rem;
+.date-field {
+  position: relative;
+}
+
+.date-field .date-display {
+  width: 100%;
+  padding-right: 2.6rem;
+}
+
+.date-field::after {
+  content: "";
+  position: absolute;
+  right: 0.85rem;
+  top: 50%;
+  width: 0.72rem;
+  height: 0.72rem;
+  border: 1.5px solid var(--metal);
+  border-radius: 2px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.date-field .date-picker {
+  position: absolute;
+  right: 0.2rem;
+  top: 0;
+  bottom: 0;
+  width: 2.4rem;
+  opacity: 0;
+  color: transparent;
+  font-size: 0;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
 }
 
 .proveedor-line {
@@ -436,8 +528,24 @@
   min-width: 0;
 }
 
-.proveedor-line .btn {
+.proveedor-line .btn,
+.field-plus .btn {
   flex: 0 0 auto;
+}
+
+.field-plus {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.field-plus .app-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.modal-back ~ .modal-back {
+  z-index: 110;
 }
 
 .campo-form {
@@ -587,6 +695,23 @@
   gap: 0.6rem;
   align-items: center;
   margin: 0.35rem 0;
+}
+
+.product-line-name {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.line-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.line-actions .btn {
+  white-space: nowrap;
 }
 
 @media (max-width: 800px) {

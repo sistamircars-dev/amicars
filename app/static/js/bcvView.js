@@ -1,7 +1,11 @@
 import { fetchBcvDate, fetchBcvToday } from "./api.js";
+import { archiveStatus, restoreHistoryFromFile, runArchiveIfNeeded } from "./archiveVault.js?v=44";
+import { createDateField } from "./dateField.js?v=34";
+import { pickArchiveDir } from "./diskStore.js?v=44";
 import { h } from "./dom.js";
 import { countBackupRows, downloadBackup, exportLocalBackup, restoreLocalBackup } from "./localBackup.js";
 import { formatDisplayDate, formatRate } from "./movements.js";
+import { downloadClientScript, runInstallSetup } from "./pwa.js?v=44";
 import { getConfig, getTasa, setConfig, upsertTasa } from "./store.js";
 import { runSync } from "./syncEngine.js";
 
@@ -43,7 +47,7 @@ async function applyRemote(result, statusNode) {
 
 export async function renderConfig(root) {
   const status = h("p", { class: "muted" }, "Consultando…");
-  const dateInput = h("input", { class: "app-input", type: "date", name: "fecha" });
+  const dateInput = createDateField({ ariaLabel: "Fecha de la tasa BCV" });
   const stockInput = h("input", {
     class: "app-input",
     type: "number",
@@ -122,6 +126,92 @@ export async function renderConfig(root) {
     fileInput.click();
   });
 
+  const memoryStatus = h("p", { class: "muted" }, "Calculando memoria local…");
+  const folderBtn = h("button", { class: "btn", type: "button" }, "Elegir carpeta de archivo");
+  const archiveNow = h("button", { class: "btn ghost", type: "button" }, "Archivar histórico ahora");
+  const restoreHistBtn = h("button", { class: "btn ghost", type: "button" }, "Traer histórico del disco");
+  const histInput = h("input", {
+    type: "file",
+    accept: "application/json,.json",
+    hidden: "hidden",
+    multiple: "multiple",
+  });
+  const installBtn = h("button", { class: "btn", type: "button" }, "Instalar en este equipo");
+  const scriptBtn = h("button", { class: "btn ghost", type: "button" }, "Descargar acceso .cmd");
+
+  async function refreshMemory() {
+    try {
+      const status = await archiveStatus();
+      const pct = Math.round(status.memory.ratio * 100);
+      const folder = status.hasFolder ? "Carpeta de archivo lista." : "Aún no hay carpeta; se descargará el histórico.";
+      memoryStatus.textContent = `Memoria de páginas virtuales: ${pct}%. Pendiente de purgar en la nube: ${status.pending}. ${folder}`;
+    } catch (_err) {
+      memoryStatus.textContent = "No se pudo leer el uso de memoria local.";
+    }
+  }
+
+  folderBtn.addEventListener("click", async () => {
+    try {
+      await pickArchiveDir();
+      memoryStatus.textContent = "Carpeta de archivo guardada en este equipo.";
+      await refreshMemory();
+    } catch (err) {
+      memoryStatus.textContent = (err && err.message) || "No se eligió carpeta.";
+    }
+  });
+
+  archiveNow.addEventListener("click", async () => {
+    archiveNow.disabled = true;
+    try {
+      const result = await runArchiveIfNeeded({ force: true, interactive: true });
+      if (result && result.empty) {
+        memoryStatus.textContent = "No hay histórico viejo o en desuso para archivar.";
+      } else if (result && result.ok) {
+        memoryStatus.textContent = `Archivados ${result.total} registros en este PC. La nube se limpia al haber conexión.`;
+      } else {
+        memoryStatus.textContent = "La memoria aún no llega al 90 % y no se forzó vacío.";
+      }
+      await refreshMemory();
+    } catch (err) {
+      memoryStatus.textContent = (err && err.message) || "No se pudo archivar.";
+    } finally {
+      archiveNow.disabled = false;
+    }
+  });
+
+  restoreHistBtn.addEventListener("click", () => histInput.click());
+  histInput.addEventListener("change", async () => {
+    const files = [...(histInput.files || [])];
+    histInput.value = "";
+    if (!files.length) {
+      return;
+    }
+    restoreHistBtn.disabled = true;
+    try {
+      let rows = 0;
+      for (const file of files) {
+        const summary = await restoreHistoryFromFile(file);
+        rows += summary.rows;
+      }
+      memoryStatus.textContent = `Histórico recuperado del disco (${rows} registros). No se vuelve a subir a la nube.`;
+    } catch (err) {
+      memoryStatus.textContent = (err && err.message) || "No se pudo leer el histórico.";
+    } finally {
+      restoreHistBtn.disabled = false;
+    }
+  });
+
+  installBtn.addEventListener("click", async () => {
+    await runInstallSetup();
+    downloadClientScript();
+    memoryStatus.textContent = "App lista en este equipo: sin Node ni Python. Si no hay internet, se abre y guarda en local.";
+  });
+  scriptBtn.addEventListener("click", () => {
+    downloadClientScript();
+  });
+
+  refreshMemory();
+
   fileInput.addEventListener("change", async () => {
     const file = fileInput.files && fileInput.files[0];
     fileInput.value = "";
@@ -183,6 +273,30 @@ export async function renderConfig(root) {
       h("div", { class: "acc-actions" }, saveBackup, restoreBtn),
       fileInput,
       backupStatus
+    ),
+    h(
+      "section",
+      { class: "glass cat-card", style: "margin-top:0.9rem" },
+      h("h3", {}, "Archivo al 90 % y purga en la nube"),
+      h(
+        "p",
+        { class: "muted" },
+        "Si las páginas virtuales superan el 90 %, el histórico viejo (facturas primeras, imágenes en desuso, bitácora antigua) se guarda en el disco de esta PC y se borra de Supabase y Cloudinary. El catálogo y el stock actual se quedan."
+      ),
+      h("div", { class: "acc-actions" }, folderBtn, archiveNow, restoreHistBtn),
+      histInput,
+      memoryStatus
+    ),
+    h(
+      "section",
+      { class: "glass cat-card", style: "margin-top:0.9rem" },
+      h("h3", {}, "Instalar en otra PC"),
+      h(
+        "p",
+        { class: "muted" },
+        "No hace falta Node. Instale desde el navegador; al reconectar se traen módulos nuevos o el apagado del servicio. Sin internet la app se abre sola y guarda en local."
+      ),
+      h("div", { class: "acc-actions" }, installBtn, scriptBtn)
     )
   );
 }

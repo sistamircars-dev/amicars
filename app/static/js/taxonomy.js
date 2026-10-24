@@ -27,10 +27,26 @@ async function hasRelated(kind, record) {
   });
 }
 
-export async function saveCampo({ subcategoriaId, nombre, tipo = "text", opciones = [] }) {
+export async function saveCampo({ subcategoriaId, nombre, tipo = "text", opciones = [], allowLoose = false }) {
   const clean = String(nombre || "").trim();
   if (!subcategoriaId) {
-    return { ok: false, error: "Elija la subcategoría del campo." };
+    if (!allowLoose) {
+      return { ok: false, error: "Elija la subcategoría del campo." };
+    }
+    if (!clean) {
+      return { ok: false, error: "Escriba el nombre del campo." };
+    }
+    const allowed = ["text", "number", "select", "boolean"];
+    return {
+      ok: true,
+      field: {
+        id: `local-${clean.toLowerCase()}`,
+        nombre: clean,
+        tipo: allowed.includes(tipo) ? tipo : "text",
+        opciones: Array.isArray(opciones) ? opciones : [],
+        is_active: true,
+      },
+    };
   }
   if (!clean) {
     return { ok: false, error: "Escriba el nombre del campo." };
@@ -56,6 +72,51 @@ export async function saveCampo({ subcategoriaId, nombre, tipo = "text", opcione
     is_active: true,
   });
   return { ok: true, field };
+}
+
+export async function promptCategoria() {
+  const values = await openModal({
+    title: "Nueva categoría",
+    fields: [
+      { name: "nombre", label: "Nombre", required: true },
+      { name: "descripcion", label: "Descripción" },
+    ],
+  });
+  if (!values || !values.nombre) {
+    return null;
+  }
+  const siblings = await db.categorias.count();
+  return saveLocal("categorias", {
+    nombre: values.nombre,
+    descripcion: values.descripcion || "",
+    imagen_url: "",
+    orden: siblings,
+    is_active: true,
+  });
+}
+
+export async function promptSubcategoria(categoria) {
+  if (!categoria?.id) {
+    throw new Error("Elija primero la categoría.");
+  }
+  const values = await openModal({
+    title: `Subcategoría en ${categoria.nombre}`,
+    fields: [
+      { name: "nombre", label: "Nombre", required: true },
+      { name: "descripcion", label: "Descripción" },
+    ],
+  });
+  if (!values || !values.nombre) {
+    return null;
+  }
+  const siblings = await db.subcategorias.where("categoria_id").equals(categoria.id).count();
+  return saveLocal("subcategorias", {
+    categoria_id: categoria.id,
+    nombre: values.nombre,
+    descripcion: values.descripcion || "",
+    orden: siblings,
+    is_active: true,
+  });
 }
 
 export async function retireCampo(record) {
@@ -175,6 +236,7 @@ export function mountCampoEditor({ categorias = [], subcategorias = [], getSubca
         nombre: nombre.value,
         tipo,
         opciones: tipo === "select" ? parsed : [],
+        allowLoose: true,
       });
       const usable = result.field && result.field.is_active !== false;
       if (usable) {
@@ -297,45 +359,19 @@ export async function renderTaxonomy(root) {
   }
 
   async function addCategory() {
-    const values = await openModal({
-      title: "Nueva categoría",
-      fields: [
-        { name: "nombre", label: "Nombre", required: true },
-        { name: "descripcion", label: "Descripción" },
-      ],
-    });
-    if (!values || !values.nombre) {
+    const saved = await promptCategoria();
+    if (!saved) {
       return;
     }
-    const saved = await saveLocal("categorias", {
-      nombre: values.nombre,
-      descripcion: values.descripcion || "",
-      imagen_url: "",
-      orden: categorias.length,
-      is_active: true,
-    });
     assignTarget = { categoriaId: saved.id, subcategoriaId: "" };
     await redraw();
   }
 
   async function addSubcategory(cat) {
-    const values = await openModal({
-      title: `Subcategoría en ${cat.nombre}`,
-      fields: [
-        { name: "nombre", label: "Nombre", required: true },
-        { name: "descripcion", label: "Descripción" },
-      ],
-    });
-    if (!values || !values.nombre) {
+    const saved = await promptSubcategoria(cat);
+    if (!saved) {
       return;
     }
-    const saved = await saveLocal("subcategorias", {
-      categoria_id: cat.id,
-      nombre: values.nombre,
-      descripcion: values.descripcion || "",
-      orden: subsOf(cat.id).length,
-      is_active: true,
-    });
     assignTarget = { categoriaId: cat.id, subcategoriaId: saved.id };
     await redraw();
   }
@@ -379,9 +415,13 @@ export async function renderTaxonomy(root) {
       `${record.nombre}${record.is_active === false ? " (inactiva)" : ""}`
     );
     select.addEventListener("click", () => {
-      assignTarget = indent
-        ? { categoriaId: record.categoria_id, subcategoriaId: record.id }
-        : { categoriaId: record.id, subcategoriaId: "" };
+      if (active) {
+        assignTarget = { categoriaId: "", subcategoriaId: "" };
+      } else {
+        assignTarget = indent
+          ? { categoriaId: record.categoria_id, subcategoriaId: record.id }
+          : { categoriaId: record.id, subcategoriaId: "" };
+      }
       paintRail();
       paintList();
     });

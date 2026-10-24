@@ -7,7 +7,7 @@
     <meta name="robots" content="noindex,nofollow" />
     <meta name="theme-color" content="#D90429" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=13" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=17" />
   </head>
   <body class="login-body">
     <main class="login-wrap">
@@ -38,5 +38,14 @@
         </form>
       </section>
     </main>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      }
+      if (!navigator.onLine) {
+        location.replace("/");
+      }
+    </script>
   </body>
 </html>
+

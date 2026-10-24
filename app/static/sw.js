@@ -1,4 +1,4 @@
-const CACHE = "amircars-offline-v15";
+const CACHE = "amircars-offline-v33";
 const PRECACHE = [
   "/offline.html",
   "/manifest.json",
@@ -6,6 +6,8 @@ const PRECACHE = [
   "/static/js/csrf.js",
   "/static/js/db.js",
   "/static/js/localBackup.js",
+  "/static/js/diskStore.js",
+  "/static/js/archiveVault.js",
   "/static/js/api.js",
   "/static/js/repository.js",
   "/static/js/syncStatus.js",
@@ -21,6 +23,7 @@ const PRECACHE = [
   "/static/js/searchBox.js",
   "/static/js/zoom.js",
   "/static/js/filters.js",
+  "/static/js/dateField.js",
   "/static/js/productForm.js",
   "/static/js/productDetail.js",
   "/static/js/bulk.js",
@@ -37,8 +40,8 @@ const PRECACHE = [
   "/static/js/views.js",
   "/static/js/router.js",
   "/static/js/app.js",
-  "/static/css/app.css?v=13",
-  "/static/css/catalog.css?v=15",
+  "/static/css/app.css?v=17",
+  "/static/css/catalog.css?v=27",
   "/static/img/amircars/logo.png",
   "/static/img/amircars/fondo.jpg?v=14",
 ];
@@ -71,6 +74,12 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
@@ -96,20 +105,28 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy));
+          const finalPath = new URL(response.url).pathname;
+          if (response.ok && finalPath !== "/login") {
+            const forRequest = response.clone();
+            const forRoot = response.clone();
+            caches.open(CACHE).then((cache) => {
+              cache.put(request, forRequest);
+              cache.put("/", forRoot);
+            });
+          }
           return response;
         })
         .catch(async () => {
-          const cached = await caches.match(request);
-          return cached || caches.match("/offline.html");
+          const cached = (await caches.match(request)) || (await caches.match("/")) || (await caches.match("/offline.html"));
+          return cached;
         })
     );
     return;
   }
+  const isScript = url.pathname.startsWith("/static/js/") || url.pathname.startsWith("/static/css/");
   event.respondWith(
     caches.match(request).then((cached) => {
-      const fetched = fetch(request)
+      const fetched = fetch(new Request(request, { cache: isScript ? "reload" : "default" }))
         .then((response) => {
           if (response && response.ok) {
             const copy = response.clone();
@@ -118,7 +135,7 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() => cached);
-      return cached || fetched;
+      return isScript ? fetched.catch(() => cached) : cached || fetched;
     })
   );
 });

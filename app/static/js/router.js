@@ -1,6 +1,6 @@
 import { h } from "./dom.js";
 import { clearRouteParams, onNavigate } from "./nav.js";
-import { VIEWS } from "./views.js";
+import { VIEWS } from "./views.js?v=44";
 
 export async function startRouter() {
   const root = document.getElementById("view-root");
@@ -20,7 +20,12 @@ export async function startRouter() {
   });
 
   Object.entries(VIEWS).forEach(([id, view]) => {
-    const button = h("button", { class: "nav-btn", type: "button", "data-view": id }, h("span", { class: "nav-label" }, view.label));
+    const button = h(
+      "button",
+      { class: "nav-btn", type: "button", "data-view": id, title: view.label, "aria-label": view.label },
+      h("span", { class: "nav-icon", "aria-hidden": "true" }, view.icon || "•"),
+      h("span", { class: "nav-label" }, view.label)
+    );
     button.addEventListener("click", () => {
       clearRouteParams();
       showView(id);

@@ -1,7 +1,9 @@
+import { createDateField } from "./dateField.js?v=34";
 import { db } from "./db.js";
 import { h } from "./dom.js";
 import { formatDisplayDate, formatRate, registerSalida, tasaFor, todayLocal } from "./movements.js";
-import { mountLines } from "./opsLines.js";
+import { getRouteParams } from "./nav.js";
+import { mountLines } from "./opsLines.js?v=40";
 
 function ticketText(value) {
   return String(value ?? "")
@@ -70,8 +72,7 @@ export function printTicket(ticket) {
 }
 
 export async function renderSalidas(root) {
-  const fecha = h("input", { class: "app-input", type: "date" });
-  fecha.value = todayLocal();
+  const fecha = createDateField({ value: todayLocal(), ariaLabel: "Fecha" });
   const cliente = h("input", { class: "app-input" });
   const documento = h("input", { class: "app-input", placeholder: "V-12345678 o J-12345678-9" });
   const status = h("p", { class: "muted" }, "");
@@ -79,6 +80,7 @@ export async function renderSalidas(root) {
   let items = [];
   let tasa = await tasaFor(fecha.value);
   let lastTicket = null;
+  let seedProductId = getRouteParams().productoId || "";
   const rateLabel = h("p", { class: "muted" }, tasa ? `Tasa ${formatDisplayDate(tasa.fecha)}: ${formatRate(tasa.usd_ves)} Bs/USD` : "Sin tasa BCV guardada. El ticket igual imprime el REF.");
 
   async function paintLines() {
@@ -87,6 +89,7 @@ export async function renderSalidas(root) {
       products: productos,
       mode: "salida",
       tasa,
+      seedProductId,
       onChange(next) {
         items = next;
       },
@@ -124,6 +127,7 @@ export async function renderSalidas(root) {
       cliente.value = "";
       documento.value = "";
       items = [];
+      seedProductId = "";
       await paintLines();
     } catch (err) {
       status.textContent = err.message || "No se pudo registrar la salida.";

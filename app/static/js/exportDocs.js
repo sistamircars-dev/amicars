@@ -192,13 +192,19 @@ const WIN_ANSI = {
 
 function pdfText(value) {
   const bytes = [];
-  for (const char of String(value ?? "")) {
+  const cleaned = String(value ?? "")
+    .replace(/[\u00A0\u202F\u2009\u2007\u2060]/g, " ")
+    .replace(/[—–−]/g, " ")
+    .replace(/[¿¡]/g, "");
+  for (const char of cleaned) {
     if (WIN_ANSI[char]) {
       bytes.push(WIN_ANSI[char]);
       continue;
     }
     const code = char.charCodeAt(0);
-    bytes.push(code >= 32 && code <= 126 ? code : 63);
+    if (code >= 32 && code <= 126) {
+      bytes.push(code);
+    }
   }
   return Array.from(bytes)
     .map((code) => (code === 40 || code === 41 || code === 92 ? `\\${String.fromCharCode(code)}` : String.fromCharCode(code)))
@@ -241,6 +247,146 @@ export function downloadPdf(base, title, rows) {
     );
     pageIds.push(pageId);
   });
+  const pagesId = add(`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] >>`);
+  const catalogId = add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+  const fixed = objects.map((text) => text.replace("Parent PAGES 0 R", `Parent ${pagesId} 0 R`));
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  fixed.forEach((text, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${text}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${fixed.length + 1}\n0000000000 65535 f \n`;
+  for (let index = 1; index < offsets.length; index += 1) {
+    pdf += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+  }
+  pdf += `trailer << /Size ${fixed.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  downloadBlob(stampName(base, "pdf"), new Blob([pdf], { type: "application/pdf" }));
+}
+
+function pdfClip(value, max) {
+  const text = String(value ?? "");
+  if (text.length <= max) {
+    return text;
+  }
+  return `${text.slice(0, Math.max(max - 1, 1))}…`;
+}
+
+export function downloadTablePdf({ base, title, meta = [], headers, rows, footer = [] }) {
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const margin = 42;
+  const usable = pageWidth - margin * 2;
+  const rowHeight = 18;
+  const colCount = Math.max(headers.length, 1);
+  const widths = (() => {
+    if (colCount === 3) {
+      return [88, usable - 88 - 70, 70];
+    }
+    if (colCount === 4) {
+      return [80, usable - 80 - 64 - 150, 64, 150];
+    }
+    if (colCount === 5) {
+      return [70, usable - 70 - 86 - 50 - 80, 86, 50, 80];
+    }
+    if (colCount === 6) {
+      return [62, usable - 62 - 74 - 80 - 40 - 72, 74, 80, 40, 72];
+    }
+    if (colCount === 7) {
+      return [54, usable - 54 - 68 - 74 - 36 - 68 - 72, 68, 74, 36, 68, 72];
+    }
+    return Array.from({ length: colCount }, () => usable / colCount);
+  })();
+  const maxChars = widths.map((width) => Math.max(6, Math.floor(width / 5.4)));
+
+  const objects = [];
+  const add = (text) => {
+    objects.push(text);
+    return objects.length;
+  };
+  const regularId = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+  const boldId = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+  const pageIds = [];
+
+  const makePage = (draw) => {
+    const ops = [];
+    const textAt = (font, size, x, y, value) => {
+      ops.push(`BT /${font} ${size} Tf ${x.toFixed(1)} ${y.toFixed(1)} Td (${pdfText(value)}) Tj ET`);
+    };
+    const rule = (x1, y1, x2, y2) => {
+      ops.push(`${x1.toFixed(1)} ${y1.toFixed(1)} m ${x2.toFixed(1)} ${y2.toFixed(1)} l S`);
+    };
+    draw({ textAt, rule, ops });
+    const stream = ops.join("\n");
+    const contentId = add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    const pageId = add(
+      `<< /Type /Page /Parent PAGES 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Contents ${contentId} 0 R /Resources << /Font << /F1 ${regularId} 0 R /F2 ${boldId} 0 R >> >> >>`
+    );
+    pageIds.push(pageId);
+  };
+
+  const headerBlock = 90 + meta.length * 14;
+  const available = pageHeight - margin * 2 - headerBlock - 36;
+  const perPage = Math.max(1, Math.floor(available / rowHeight) - 1);
+  const chunks = [];
+  if (!rows.length) {
+    chunks.push([]);
+  } else {
+    for (let index = 0; index < rows.length; index += perPage) {
+      chunks.push(rows.slice(index, index + perPage));
+    }
+  }
+
+  chunks.forEach((chunk, pageIndex) => {
+    makePage(({ textAt, rule }) => {
+      let y = pageHeight - margin;
+      textAt("F2", 16, margin, y, title);
+      y -= 18;
+      textAt("F1", 9, margin, y, `Página ${pageIndex + 1} de ${chunks.length}`);
+      y -= 16;
+      meta.forEach((line) => {
+        textAt("F1", 10, margin, y, line);
+        y -= 14;
+      });
+      y -= 8;
+      const tableTop = y + 4;
+      const tableBottom = y - rowHeight * (chunk.length + 1) - 2;
+      rule(margin, tableTop, margin + usable, tableTop);
+      let x = margin;
+      headers.forEach((header, col) => {
+        textAt("F2", 9, x + 4, y - 12, pdfClip(header, maxChars[col]));
+        x += widths[col];
+      });
+      y -= rowHeight;
+      rule(margin, y + 4, margin + usable, y + 4);
+      chunk.forEach((row) => {
+        x = margin;
+        row.forEach((cell, col) => {
+          const alignRight = /^(cantidad|stock|total)/i.test(String(headers[col] || ""));
+          const label = pdfClip(cell, maxChars[col]);
+          const tx = alignRight ? x + widths[col] - 8 - label.length * 5 : x + 4;
+          textAt("F1", 9, Math.max(x + 2, tx), y - 12, label);
+          x += widths[col];
+        });
+        y -= rowHeight;
+        rule(margin, y + 4, margin + usable, y + 4);
+      });
+      rule(margin, tableTop, margin, tableBottom);
+      rule(margin + usable, tableTop, margin + usable, tableBottom);
+      let gx = margin;
+      widths.forEach((width) => {
+        rule(gx, tableTop, gx, tableBottom);
+        gx += width;
+      });
+      y -= 10;
+      footer.forEach((line) => {
+        textAt("F2", 10, margin, y, line);
+        y -= 14;
+      });
+    });
+  });
+
   const pagesId = add(`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] >>`);
   const catalogId = add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
   const fixed = objects.map((text) => text.replace("Parent PAGES 0 R", `Parent ${pagesId} 0 R`));

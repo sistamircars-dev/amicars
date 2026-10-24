@@ -43,6 +43,30 @@ export async function healthCheck() {
   }
 }
 
+export async function runtimeInfo() {
+  try {
+    const result = await request("/api/health");
+    if (result.ok && result.data && result.data.ok === true) {
+      return result.data;
+    }
+  } catch (_err) {
+    /* Sin red se usa la revisión local. */
+  }
+  return null;
+}
+
+export async function refreshSession() {
+  try {
+    return await request("/api/auth/refresh", { method: "POST", json: {} });
+  } catch (_err) {
+    return { ok: false, status: 0, data: { ok: false } };
+  }
+}
+
+export async function purgeArchived(items) {
+  return request("/api/archive/purge", { method: "POST", json: { items } });
+}
+
 export async function pushQueue(items) {
   return request("/api/sync/push", { method: "POST", json: { items } });
 }

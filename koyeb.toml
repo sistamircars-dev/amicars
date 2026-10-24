@@ -1,6 +1,9 @@
 [app]
 name = "amircars"
 
+# Koyeb: Create App → GitHub → repo amircars → Build: Python (Procfile web: gunicorn).
+# Secrets (not in git): SUPABASE_URL, SUPABASE_KEY, FLASK_SECRET_KEY, CLOUDINARY_URL.
+
 [env]
 FLASK_DEBUG = "0"
 FORCE_HTTPS = "true"

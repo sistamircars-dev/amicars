@@ -1,10 +1,12 @@
-import { registerServiceWorker } from "./pwa.js";
-import { startSyncEngine } from "./syncEngine.js";
-import { startRouter } from "./router.js";
-import { refreshRateChip, syncTodayRate } from "./bcvView.js";
+import { startArchiveVault } from "./archiveVault.js?v=44";
+import { startRuntime } from "./pwa.js?v=44";
+import { startSyncEngine } from "./syncEngine.js?v=44";
+import { startRouter } from "./router.js?v=44";
+import { refreshRateChip, syncTodayRate } from "./bcvView.js?v=35";
 
-registerServiceWorker();
+startRuntime();
 startSyncEngine();
 startRouter();
+startArchiveVault();
 refreshRateChip();
 syncTodayRate();

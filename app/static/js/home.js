@@ -1,7 +1,7 @@
 import { coverFor, loadContext, PLACEHOLDER, safeImg } from "./catalog.js";
 import { h } from "./dom.js";
 import { go } from "./nav.js";
-import { openProduct } from "./productDetail.js";
+import { openProduct } from "./productDetail.js?v=29";
 import { mountSearch } from "./searchBox.js";
 
 export async function renderHome(root) {

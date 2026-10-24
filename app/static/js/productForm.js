@@ -1,5 +1,6 @@
 import { createProduct, loadContext, updateProduct } from "./catalog.js";
 import { h } from "./dom.js";
+import { promptCategoria, promptSubcategoria } from "./taxonomy.js?v=37";
 
 export function dynamicFields(campos, values = {}) {
   const box = h("div", { class: "dynamic-fields" });
@@ -75,6 +76,13 @@ export function openProductForm(existing = null) {
       return ctx.listas.campos.filter((field) => field.subcategoria_id === subSelect.value);
     }
 
+    function fillCats() {
+      catSelect.replaceChildren(h("option", { value: "" }, "Sin categoría"));
+      ctx.listas.categorias
+        .filter((row) => row.is_active !== false || row.id === existing?.categoria_id)
+        .forEach((row) => catSelect.append(h("option", { value: row.id }, row.nombre)));
+    }
+
     function refillSubs() {
       const current = existing && subSelect.value === "" ? existing.subcategoria_id : subSelect.value;
       subSelect.replaceChildren(h("option", { value: "" }, "Sin subcategoría"));
@@ -86,6 +94,54 @@ export function openProductForm(existing = null) {
       const seed = Object.keys(typed).length ? typed : existing?.atributos || {};
       fieldHost.replaceChildren(dynamicFields(fieldsForSub(), seed));
     }
+
+    async function reloadTaxonomy(categoriaId, subcategoriaId) {
+      ctx = await loadContext();
+      fillCats();
+      catSelect.value = categoriaId || "";
+      refillSubs();
+      if (subcategoriaId) {
+        subSelect.value = subcategoriaId;
+        fieldHost.replaceChildren(dynamicFields(fieldsForSub(), readDynamic(fieldHost)));
+      }
+    }
+
+    function plusButton(title, onClick) {
+      const button = h("button", { class: "btn small ghost cat-plus", type: "button", title, "aria-label": title }, "+");
+      button.addEventListener("click", onClick);
+      return button;
+    }
+
+    const addCat = plusButton("Nueva categoría", async () => {
+      try {
+        const saved = await promptCategoria();
+        if (!saved) {
+          return;
+        }
+        await reloadTaxonomy(saved.id, "");
+        status.textContent = `Categoría ${saved.nombre} creada. Queda en el panel Categorías.`;
+      } catch (err) {
+        status.textContent = err.message || "No se pudo crear la categoría.";
+      }
+    });
+
+    const addSub = plusButton("Nueva subcategoría", async () => {
+      const cat = ctx?.listas.categorias.find((row) => row.id === catSelect.value);
+      if (!cat) {
+        status.textContent = "Elija primero la categoría.";
+        return;
+      }
+      try {
+        const saved = await promptSubcategoria(cat);
+        if (!saved) {
+          return;
+        }
+        await reloadTaxonomy(cat.id, saved.id);
+        status.textContent = `Subcategoría ${saved.nombre} creada en ${cat.nombre}. Queda en el panel Categorías.`;
+      } catch (err) {
+        status.textContent = err.message || "No se pudo crear la subcategoría.";
+      }
+    });
 
     function close(result) {
       back.remove();
@@ -130,10 +186,7 @@ export function openProductForm(existing = null) {
 
     loadContext().then((loaded) => {
       ctx = loaded;
-      catSelect.replaceChildren(h("option", { value: "" }, "Sin categoría"));
-      ctx.listas.categorias
-        .filter((row) => row.is_active !== false || row.id === existing?.categoria_id)
-        .forEach((row) => catSelect.append(h("option", { value: row.id }, row.nombre)));
+      fillCats();
       catSelect.value = existing?.categoria_id || "";
       provSelect.replaceChildren(h("option", { value: "" }, "Sin proveedor"));
       ctx.listas.proveedores
@@ -151,14 +204,14 @@ export function openProductForm(existing = null) {
     const grid = h(
       "div",
       { class: "form-grid" },
-      h("label", { class: "field-row" }, "Categoría", catSelect),
-      h("label", { class: "field-row" }, "Subcategoría", subSelect),
+      h("label", { class: "field-row" }, "Categoría", h("div", { class: "field-plus" }, catSelect, addCat)),
+      h("label", { class: "field-row" }, "Subcategoría", h("div", { class: "field-plus" }, subSelect, addSub)),
       h("label", { class: "field-row" }, "Proveedor", provSelect),
       h("label", { class: "field-row" }, "Código", codigo),
       h("label", { class: "field-row span-2" }, "Descripción", descripcion),
       h("label", { class: "field-row" }, "Costo REF", refEntrada),
       h("label", { class: "field-row" }, "Precio venta REF", refVenta),
-      existing ? h("p", { class: "muted" }, `Stock actual: ${existing.stock}. Las entradas de mercancía se registran en Inventario.`) : h("label", { class: "field-row" }, "Stock inicial", stock),
+      existing ? h("p", { class: "muted" }, `Stock actual: ${existing.stock}. Las entradas de mercancía se registran en Entradas.`) : h("label", { class: "field-row" }, "Stock inicial", stock),
       h("label", { class: "field-row" }, "Stock mínimo", stockMin),
       h("label", { class: "field-row span-2" }, "Fotos opcionales (JPEG, PNG o WEBP, máx. 5MB)", files),
       fieldHost

@@ -8,8 +8,8 @@
     <meta name="theme-color" content="#D90429" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=13" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/catalog.css') }}?v=15" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=17" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/catalog.css') }}?v=27" />
   </head>
   <body class="app-body">
     <div class="app-shell" id="app-shell">
@@ -32,12 +32,12 @@
         <nav class="nav-list" id="nav-list"></nav>
         <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-          <button class="btn ghost" type="submit"><span>Salir</span></button>
+          <button class="btn ghost" type="submit" title="Salir" aria-label="Salir"><span class="nav-icon" aria-hidden="true">⏻</span><span>Salir</span></button>
         </form>
       </aside>
       <main class="glass panel-main" id="view-root"></main>
     </div>
     <script src="{{ url_for('static', filename='vendor/dexie.min.js') }}"></script>
-    <script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/app.js') }}?v=44"></script>
   </body>
 </html>

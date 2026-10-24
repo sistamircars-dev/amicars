@@ -1,11 +1,16 @@
 import { attachPhotos } from "./catalog.js";
 import { createCombo } from "./combo.js";
+import { createDateField } from "./dateField.js?v=34";
 import { db } from "./db.js";
 import { h } from "./dom.js";
-import { formatDisplayDate, formatRate, registerEntrada, tasaFor, todayLocal } from "./movements.js";
-import { mountLines } from "./opsLines.js";
+import { formatDisplayDate, formatRate, registerEntrada, tasaFor, todayLocal } from "./movements.js?v=36";
+import { mountLines } from "./opsLines.js?v=40";
 import { saveLocal } from "./repository.js";
-import { mountCampoEditor, retireCampo } from "./taxonomy.js";
+import { mountCampoEditor, retireCampo } from "./taxonomy.js?v=36";
+
+export async function renderEntradas(root) {
+  await mountEntrada(root);
+}
 
 function rateText(tasa, withPending) {
   if (!tasa) {
@@ -32,9 +37,7 @@ export async function mountEntrada(host, { onSaved } = {}) {
   const proveedores = (await db.proveedores.toArray()).filter((row) => row.is_active !== false);
   const categorias = await db.categorias.toArray();
   const subcategorias = await db.subcategorias.toArray();
-  const llegada = h("input", { class: "app-input", type: "date", lang: "es" });
-  llegada.value = todayLocal();
-  const llegadaText = h("span", { class: "date-readout" }, formatDisplayDate(llegada.value));
+  const llegada = createDateField({ value: todayLocal(), ariaLabel: "Fecha de llegada de la factura" });
   const numero = h("input", { class: "app-input", autocomplete: "off", placeholder: "Ej. 000123" });
   let proveedorId = "";
   const proveedorCombo = createCombo({
@@ -66,30 +69,13 @@ export async function mountEntrada(host, { onSaved } = {}) {
       h("label", { class: "field-row span-2" }, "Notas", notas)
     )
   );
-  const photo = h("input", {
-    class: "app-input",
-    type: "file",
-    accept: "image/jpeg,image/png,image/webp",
-  });
-  const photoWrap = h("label", { class: "field-row entrada-photo span-2" }, "Foto del producto (opcional)", photo);
   const status = h("p", { class: "muted" }, "");
   const linesHost = h("div");
   let items = [];
-  let lineCount = 1;
   let extraFields = [];
   let linesApi = null;
   let tasa = await tasaFor(llegada.value);
   const rateLabel = h("p", { class: "muted" }, rateText(tasa, true));
-
-  function syncPhoto(count) {
-    lineCount = count;
-    const single = count === 1;
-    photoWrap.hidden = !single;
-    photoWrap.style.display = single ? "" : "none";
-    if (!single) {
-      photo.value = "";
-    }
-  }
 
   async function paintLines() {
     const productos = (await db.productos.toArray()).filter((row) => row.is_active !== false);
@@ -100,9 +86,8 @@ export async function mountEntrada(host, { onSaved } = {}) {
       fields: extraFields,
       toolbarNodes: [addCampo],
       onRetireField: dropField,
-      onChange(next, meta) {
+      onChange(next) {
         items = next;
-        syncPhoto(meta && meta.count ? meta.count : 1);
       },
     });
   }
@@ -115,13 +100,13 @@ export async function mountEntrada(host, { onSaved } = {}) {
         status.textContent = result.error || "No se pudo crear el campo.";
         return;
       }
-      if (!extraFields.some((field) => field.id === result.field.id)) {
+      if (!extraFields.some((field) => field.id === result.field.id || field.nombre === result.field.nombre)) {
         extraFields.push(result.field);
       }
       if (linesApi) {
         linesApi.setFields(extraFields);
       }
-      status.textContent = result.ok ? "Campo añadido a la tabla." : "Ese campo ya existe. La columna quedó en la tabla.";
+      status.textContent = result.ok ? `Campo ${result.field.nombre} añadido como columna.` : "Ese campo ya existe. La columna quedó en la tabla.";
     },
   });
   const addCampo = h("button", { class: "btn ghost", type: "button" }, "Añadir campo");
@@ -141,7 +126,6 @@ export async function mountEntrada(host, { onSaved } = {}) {
   }
 
   llegada.addEventListener("change", async () => {
-    llegadaText.textContent = llegada.value ? formatDisplayDate(llegada.value) : "";
     tasa = await tasaFor(llegada.value);
     rateLabel.textContent = rateText(tasa, false);
     if (linesApi) {
@@ -208,8 +192,31 @@ export async function mountEntrada(host, { onSaved } = {}) {
         throw new Error("Indique la fecha de llegada.");
       }
       const chosen = proveedores.find((row) => row.id === proveedorId) || null;
+      if (!chosen) {
+        throw new Error("Indique el proveedor de la factura.");
+      }
       const savedItems = items.slice();
-      const file = lineCount === 1 && photo.files && photo.files[0] ? photo.files[0] : null;
+      if (!savedItems.length) {
+        throw new Error("Agregue al menos un ítem.");
+      }
+      for (const item of savedItems) {
+        if (!String(item.codigo || "").trim()) {
+          throw new Error("Indique el código de cada producto.");
+        }
+        if (!String(item.descripcion || "").trim()) {
+          throw new Error(`Indique el producto del código ${item.codigo}.`);
+        }
+      }
+      for (const field of extraFields) {
+        if (field.tipo === "boolean") {
+          continue;
+        }
+        for (const item of savedItems) {
+          if (!String((item.atributos || {})[field.nombre] ?? "").trim()) {
+            throw new Error(`Indique ${field.nombre} en ${item.descripcion || item.codigo}.`);
+          }
+        }
+      }
       await registerEntrada({
         fecha: llegada.value,
         proveedor: chosen,
@@ -218,20 +225,20 @@ export async function mountEntrada(host, { onSaved } = {}) {
         numeroFactura: numero.value.trim(),
         fechaLlegada: llegada.value,
       });
-      let photoNote = "";
-      if (file && savedItems.length === 1) {
-        const notes = await attachPhotos(savedItems[0].producto_id, [file]);
-        photoNote = notes.length ? ` ${notes.join(" ")}` : " Foto adjunta al producto.";
+      const notes = [];
+      for (const item of savedItems) {
+        if (item.files && item.files.length) {
+          notes.push(...(await attachPhotos(item.producto_id, item.files)));
+        }
       }
-      status.textContent = `Entrada registrada. El REF vigente quedó actualizado y el anterior pasó al histórico.${photoNote}`;
+      const extraNote = notes.length ? ` ${notes.join(" ")}` : savedItems.some((item) => item.files && item.files.length) ? " Fotos adjuntas." : "";
+      status.textContent = `Entrada registrada. El REF vigente quedó actualizado y el anterior pasó al histórico.${extraNote}`;
       if (onSaved) {
         await onSaved();
       }
       items = [];
       numero.value = "";
-      photo.value = "";
       llegada.value = todayLocal();
-      llegadaText.textContent = formatDisplayDate(llegada.value);
       tasa = await tasaFor(llegada.value);
       rateLabel.textContent = rateText(tasa, true);
       await paintLines();
@@ -246,16 +253,15 @@ export async function mountEntrada(host, { onSaved } = {}) {
     h(
       "div",
       { class: "sheet-compact" },
-      h("h3", {}, "Entrada de mercancía"),
+      h("div", { class: "view-title" }, h("h2", {}, "Entradas")),
       h("p", { class: "muted" }, "Al ingresar mercancía se sustituyen el costo y el precio REF, y los valores anteriores quedan en el histórico."),
       h(
         "div",
         { class: "entrada-fields" },
         h("label", { class: "field-row" }, "Número de factura", numero),
-        h("label", { class: "field-row" }, "Fecha de llegada de la factura", llegada, llegadaText),
+        h("label", { class: "field-row" }, "Fecha de llegada de la factura", llegada),
         h("div", { class: "field-row" }, h("span", {}, "Proveedor"), h("div", { class: "proveedor-line" }, proveedorCombo.element, nuevo)),
-        extra,
-        photoWrap
+        extra
       ),
       rateLabel,
       editor.element,
@@ -264,5 +270,5 @@ export async function mountEntrada(host, { onSaved } = {}) {
       status
     )
   );
-  paintLines();
+  await paintLines();
 }

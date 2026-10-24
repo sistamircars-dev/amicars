@@ -5,11 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AMIRCARS — Sin conexión</title>
     <meta name="theme-color" content="#D90429" />
+    <link rel="manifest" href="/manifest.json" />
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0B0C10; color: #F5F5F5; font-family: Segoe UI, sans-serif; }
+      main { max-width: 28rem; padding: 1.5rem; }
+      button { background: #D90429; color: #fff; border: 0; padding: 0.6rem 1rem; border-radius: 8px; cursor: pointer; }
+    </style>
   </head>
   <body>
     <main>
       <h1>AMIRCARS</h1>
-      <p>No hay conexión. Reabra el panel cuando el navegador haya cacheado la sesión, o reconéctese para continuar.</p>
+      <p>No hay internet. Si ya usó el panel en este equipo, se abre la copia local y se guarda aquí hasta reconectar.</p>
+      <button type="button" id="open-local">Abrir copia local</button>
     </main>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      }
+      document.getElementById("open-local").addEventListener("click", () => {
+        location.replace("/");
+      });
+    </script>
   </body>
 </html>

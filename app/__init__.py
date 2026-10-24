@@ -51,6 +51,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     def _harden_response(response):
         return apply_security_headers(app, response)
 
+    from app.blueprints.archive import bp as archive_bp
     from app.blueprints.auth import bp as auth_bp
     from app.blueprints.bcv import bp as bcv_bp
     from app.blueprints.health import bp as health_bp
@@ -66,6 +67,7 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     app.register_blueprint(sync_bp)
     app.register_blueprint(media_bp)
     app.register_blueprint(bcv_bp)
+    app.register_blueprint(archive_bp)
 
     @app.errorhandler(403)
     def forbidden(_err):

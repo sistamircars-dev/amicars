@@ -1,0 +1,2 @@
+APP_REVISION = "44"
+APP_SERVICE = "amircars"

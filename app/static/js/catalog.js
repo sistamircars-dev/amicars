@@ -17,14 +17,19 @@ export function num(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function moneyPlain(value) {
+  return Number(value || 0)
+    .toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    .replace(/[\u00A0\u202F\u2009\u2007]/g, " ");
+}
+
 export function formatPair(ref, tasa) {
   const usd = num(ref);
-  const usdTxt = usd.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const usdTxt = moneyPlain(usd);
   if (!tasa || !tasa.usd_ves) {
     return `${usdTxt} REF`;
   }
-  const bs = usd * Number(tasa.usd_ves);
-  const bsTxt = bs.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const bsTxt = moneyPlain(usd * Number(tasa.usd_ves));
   return `${usdTxt} REF / ${bsTxt} Bs`;
 }
 
@@ -42,11 +47,12 @@ export function thumbUrl(url) {
 }
 
 export function blobUrlFor(item) {
-  if (!item || !item.blob) {
+  const blob = item && (item.blob || item.local_blob);
+  if (!blob) {
     return "";
   }
   if (!blobUrls.has(item.id)) {
-    blobUrls.set(item.id, URL.createObjectURL(item.blob));
+    blobUrls.set(item.id, URL.createObjectURL(blob));
   }
   return blobUrls.get(item.id);
 }
@@ -143,14 +149,17 @@ export function matchesFieldFilters(attrs, filterState) {
 
 export function galleryFor(productId, ctx) {
   const stored = ctx.listas.imagenes
-    .filter((item) => item.producto_id === productId && item.is_active !== false && item.cloudinary_url)
+    .filter((item) => item.producto_id === productId && item.is_active !== false && (item.cloudinary_url || item.local_blob))
     .sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.orden || 0) - Number(b.orden || 0));
-  const photos = stored.map((item) => ({
-    id: item.id,
-    src: thumbUrl(item.cloudinary_url),
-    full: item.cloudinary_url,
-    alt: item.alt_text || "",
-  }));
+  const photos = stored.map((item) => {
+    const local = blobUrlFor(item);
+    return {
+      id: item.id,
+      src: local || thumbUrl(item.cloudinary_url),
+      full: local || item.cloudinary_url,
+      alt: item.alt_text || "",
+    };
+  });
   ctx.listas.offline
     .filter((item) => item.producto_id === productId && item.blob)
     .sort((a, b) => Number(a.orden || 0) - Number(b.orden || 0))
@@ -547,7 +556,7 @@ export function parseCatalogLines(text, campos = []) {
   return rows.filter((row) => row.descripcion || row.codigo);
 }
 
-export async function requestRestock(product) {
+export async function requestRestock(product, note = "Solicitud desde el buscador") {
   const current = (await db.productos.get(product.id)) || product;
   await saveLocal("productos", { ...current, solicitar_restock: true });
   const pending = await db.solicitudes_restock
@@ -557,7 +566,7 @@ export async function requestRestock(product) {
     await saveLocal("solicitudes_restock", {
       producto_id: current.id,
       cantidad_sugerida: num(current.stock_minimo) || 1,
-      notas: "Solicitud desde el buscador",
+      notas: note,
       estado: "pendiente",
       is_active: true,
     });

@@ -30,6 +30,31 @@ class HealthOut(StrictModel):
     ok: bool
     status: Literal["online"]
     service: str
+    revision: str = "43"
+
+
+class ArchivePurgeItem(StrictModel):
+    table: str = Field(min_length=1, max_length=64)
+    id: str
+    cloudinary_public_id: Optional[str] = None
+
+    @field_validator("id")
+    @classmethod
+    def valid_uuid(cls, value: str) -> str:
+        if not _UUID_RE.match(value):
+            raise ValueError("id debe ser UUID v4")
+        return value.lower()
+
+    @field_validator("table")
+    @classmethod
+    def table_ident(cls, value: str) -> str:
+        if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", value):
+            raise ValueError("Nombre de tabla inválido")
+        return value
+
+
+class ArchivePurgeIn(StrictModel):
+    items: list[ArchivePurgeItem] = Field(default_factory=list, max_length=400)
 
 
 class SyncPushItem(StrictModel):

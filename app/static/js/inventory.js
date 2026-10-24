@@ -1,18 +1,19 @@
-import { renderBulk } from "./bulk.js";
-import { mountEntrada } from "./entradas.js";
-import { coverFor, formatPair, loadContext, matchesFieldFilters, matchesQuery, num, productBlob, safeImg } from "./catalog.js";
-import { downloadCsv, downloadPdf, downloadXlsx } from "./exportDocs.js";
+import { coverFor, formatPair, loadContext, matchesFieldFilters, matchesQuery, productBlob, safeImg } from "./catalog.js?v=40";
+import { db } from "./db.js";
+import { downloadTablePdf, downloadXlsx } from "./exportDocs.js?v=40";
 import { h } from "./dom.js";
+import { formatDisplayDate, todayLocal } from "./movements.js?v=36";
 import { mountFieldFilters } from "./filters.js";
 import { getRouteParams } from "./nav.js";
-import { openProduct } from "./productDetail.js";
-import { openProductForm } from "./productForm.js";
+import { openProduct } from "./productDetail.js?v=37";
+import { openProductForm } from "./productForm.js?v=37";
 import { mountSearch } from "./searchBox.js";
 import { getPrefs, savePrefs } from "./store.js";
 
 const COLUMNS = [
   { id: "codigo", label: "Código" },
   { id: "descripcion", label: "Descripción" },
+  { id: "categoria", label: "Categoría" },
   { id: "proveedor", label: "Proveedor" },
   { id: "stock", label: "Stock" },
   { id: "costo", label: "Costo (REF/Bs)" },
@@ -23,9 +24,10 @@ const DEFAULT_MOSAIC = ["descripcion", "stock", "venta"];
 
 function textOf(product, id, ctx) {
   const proveedor = ctx.proveedores.get(product.proveedor_id);
-  if (id === "codigo") return product.codigo || "—";
+  if (id === "codigo") return product.codigo || "";
   if (id === "descripcion") return product.descripcion;
-  if (id === "proveedor") return proveedor ? proveedor.razon_social : "—";
+  if (id === "categoria") return ctx.categorias.get(product.categoria_id)?.nombre || "";
+  if (id === "proveedor") return proveedor ? proveedor.razon_social : "";
   if (id === "stock") return String(product.stock ?? 0);
   if (id === "costo") return formatPair(product.ref_entrada, ctx.tasa);
   if (id === "venta") return formatPair(product.ref_venta, ctx.tasa);
@@ -44,7 +46,8 @@ function groupProducts(ctx, products) {
     const catId = cat ? cat.id : "";
     if (!cats.has(catId)) {
       cats.set(catId, {
-        nombre: cat ? cat.nombre : "Sin categoría",
+        nombre: cat ? cat.nombre : "",
+        untitled: !cat,
         inactive: Boolean(cat && cat.is_active === false),
         subs: new Map(),
       });
@@ -53,7 +56,7 @@ function groupProducts(ctx, products) {
     const sub = ctx.subcategorias.get(product.subcategoria_id);
     const subId = sub ? sub.id : "";
     if (!bucket.subs.has(subId)) {
-      bucket.subs.set(subId, { nombre: sub ? sub.nombre : "Sin subcategoría", products: [] });
+      bucket.subs.set(subId, { nombre: sub ? sub.nombre : "", products: [] });
     }
     bucket.subs.get(subId).products.push(product);
   });
@@ -73,7 +76,7 @@ export async function renderInventory(root) {
   const listHost = h("div", { class: "inv-list" });
   const filterHost = h("div");
   const searchHost = h("div", { class: "hero-search" });
-  const category = h("select", { class: "app-select", "aria-label": "Categoría" }, h("option", { value: "" }, "Todas las categorías"));
+  const category = h("select", { class: "app-select inv-filter", "aria-label": "Categoría" }, h("option", { value: "" }, "Todas las categorías"));
   ctx.listas.categorias
     .slice()
     .sort((a, b) => Number(a.orden || 0) - Number(b.orden || 0) || a.nombre.localeCompare(b.nombre, "es"))
@@ -81,16 +84,28 @@ export async function renderInventory(root) {
   if (params.categoriaId) {
     category.value = params.categoriaId;
   }
+  const provider = h("select", { class: "app-select inv-filter", "aria-label": "Proveedor" }, h("option", { value: "" }, "Todos los proveedores"));
+  ctx.listas.proveedores
+    .filter((row) => row.is_active !== false)
+    .slice()
+    .sort((a, b) => a.razon_social.localeCompare(b.razon_social, "es"))
+    .forEach((row) => provider.append(h("option", { value: row.id }, `${row.codigo_proveedor} · ${row.razon_social}`)));
+  if (params.proveedorId) {
+    provider.value = params.proveedorId;
+  }
 
   const campos = ctx.listas.campos.filter((field) => field.is_active !== false);
+  const extraColumns = [...new Set(campos.map((field) => field.nombre))].map((name) => ({ id: `attr:${name}`, label: name }));
+  const allColumns = [...COLUMNS, ...extraColumns];
   const mosaicOptions = [
     { id: "codigo", label: "Código" },
     { id: "descripcion", label: "Descripción" },
+    { id: "categoria", label: "Categoría" },
     { id: "proveedor", label: "Proveedor" },
     { id: "stock", label: "Stock" },
     { id: "costo", label: "Costo" },
     { id: "venta", label: "Venta" },
-    ...[...new Set(campos.map((field) => field.nombre))].map((name) => ({ id: `attr:${name}`, label: name })),
+    ...extraColumns,
   ];
 
   const tableBtn = h("button", { class: mode === "tabla" ? "btn small" : "btn small ghost", type: "button" }, "Tabla");
@@ -105,7 +120,7 @@ export async function renderInventory(root) {
     mosaicBox.parentElement.hidden = mode !== "mosaico";
   }
 
-  COLUMNS.forEach((column) => {
+  allColumns.forEach((column) => {
     const box = h("input", { type: "checkbox" });
     box.checked = !hiddenCols.has(column.id);
     box.addEventListener("change", async () => {
@@ -139,7 +154,7 @@ export async function renderInventory(root) {
   mosaicBtn.addEventListener("click", () => setMode("mosaico"));
 
   function renderTable(products, view) {
-    const visible = COLUMNS.filter((column) => !hiddenCols.has(column.id));
+    const visible = allColumns.filter((column) => !hiddenCols.has(column.id));
     if (!visible.length) {
       return h("p", { class: "muted" }, "Active al menos una columna.");
     }
@@ -188,36 +203,43 @@ export async function renderInventory(root) {
     );
   }
 
-  const sheetHeaders = ["Código", "Descripción", "Categoría", "Proveedor", "Stock", "Costo REF", "Costo Bs", "Venta REF", "Venta Bs"];
-  let sheetRows = [sheetHeaders];
+  let sheetRows = [[]];
+  let listedProducts = [];
+  let exportView = ctx;
   let ticket = 0;
+  function exportColumns() {
+    const visible = allColumns.filter((column) => !hiddenCols.has(column.id));
+    return visible.length ? visible : allColumns;
+  }
+  function sheetFor(products, view) {
+    const visible = exportColumns();
+    return [
+      visible.map((column) => column.label),
+      ...products.map((product) => visible.map((column) => textOf(product, column.id, view))),
+    ];
+  }
   async function refresh() {
     const current = ++ticket;
     const view = await loadContext();
     if (current !== ticket) {
       return;
     }
+    const linkedIds = new Set();
+    if (provider.value) {
+      (await db.producto_proveedores.toArray())
+        .filter((link) => link.proveedor_id === provider.value && link.is_active !== false)
+        .forEach((link) => linkedIds.add(link.producto_id));
+    }
     const products = view.listas.productos.filter((product) => {
       if (product.is_active === false) return false;
       if (category.value && product.categoria_id !== category.value) return false;
+      if (provider.value && product.proveedor_id !== provider.value && !linkedIds.has(product.id)) return false;
       if (!matchesQuery(productBlob(product, view), query)) return false;
       return matchesFieldFilters(product.atributos || {}, filters);
     });
-    const rate = view.tasa ? num(view.tasa.usd_ves) : 0;
-    sheetRows = [
-      sheetHeaders,
-      ...products.map((product) => [
-        product.codigo || "",
-        product.descripcion || "",
-        view.categorias.get(product.categoria_id)?.nombre || "",
-        view.proveedores.get(product.proveedor_id)?.razon_social || "",
-        num(product.stock),
-        num(product.ref_entrada),
-        rate ? Number((num(product.ref_entrada) * rate).toFixed(2)) : "",
-        num(product.ref_venta),
-        rate ? Number((num(product.ref_venta) * rate).toFixed(2)) : "",
-      ]),
-    ];
+    sheetRows = sheetFor(products, view);
+    listedProducts = products;
+    exportView = view;
     const groups = groupProducts(view, products);
     if (!groups.length) {
       listHost.replaceChildren(h("div", { class: "empty glass" }, "No hay repuestos para este filtro."));
@@ -228,32 +250,44 @@ export async function renderInventory(root) {
         h(
           "section",
           { class: group.inactive ? "inv-group inactive" : "inv-group" },
-          h("h3", {}, group.nombre),
-          ...group.subs.map((sub) => h("div", { class: "inv-sub" }, h("h4", {}, sub.nombre), mode === "tabla" ? renderTable(sub.products, view) : renderMosaic(sub.products, view)))
+          group.untitled ? h("p", { class: "muted inv-untitled" }, "Sin categoría") : h("h3", {}, group.nombre),
+          ...group.subs.map((sub) =>
+            h(
+              "div",
+              { class: "inv-sub" },
+              sub.nombre ? h("h4", {}, sub.nombre) : null,
+              mode === "tabla" ? renderTable(sub.products, view) : renderMosaic(sub.products, view)
+            )
+          )
         )
       )
     );
   }
 
+  function printInventoryPdf() {
+    const provLabel = provider.selectedOptions[0]?.textContent || "";
+    downloadTablePdf({
+      base: "inventario",
+      title: "Inventario AMIRCARS",
+      meta: [`Fecha: ${formatDisplayDate(todayLocal())}`, provider.value ? `Proveedor: ${provLabel}` : ""].filter(Boolean),
+      headers: ["Código", "Descripción", "Stock", "Stock real"],
+      rows: listedProducts.map((product) => [product.codigo || "", product.descripcion || "", String(product.stock ?? 0), ""]),
+      footer: [`Total: ${listedProducts.length} producto${listedProducts.length === 1 ? "" : "s"}`],
+    });
+  }
+
   const colDetails = h("details", { class: "filter-box" }, h("summary", {}, "Columnas"), colBox);
   const mosaicDetails = h("details", { class: "filter-box" }, h("summary", {}, "Datos en la tarjeta"), mosaicBox);
-  const toolbar = h(
+  const reports = h(
     "div",
-    { class: "toolbar" },
-    tableBtn,
-    mosaicBtn,
-    category,
-    h("button", { class: "btn small", type: "button", onclick: () => openProductForm().then((saved) => saved && refresh()) }, "Nuevo"),
-    h("button", { class: "btn small ghost", type: "button", onclick: () => renderBulk(root, { onDone: () => renderInventory(root) }) }, "Carga masiva"),
-    h("button", { class: "btn small ghost", type: "button", onclick: () => downloadCsv("inventario", sheetRows) }, "CSV"),
+    { class: "toolbar report-actions" },
     h("button", { class: "btn small ghost", type: "button", onclick: () => downloadXlsx("inventario", sheetRows) }, "Excel"),
-    h("button", { class: "btn small ghost", type: "button", onclick: () => downloadPdf("inventario", "Inventario filtrado", sheetRows) }, "PDF")
+    h("button", { class: "btn small ghost", type: "button", onclick: printInventoryPdf }, "PDF")
   );
+  const toolbar = h("div", { class: "toolbar inv-toolbar" }, tableBtn, mosaicBtn, category, provider, reports);
 
-  const entradaHost = h("section", { class: "entrada-panel", "aria-label": "Entrada de mercancía" });
   root.replaceChildren(
     h("div", { class: "view-title" }, h("h2", {}, "Inventario")),
-    entradaHost,
     toolbar,
     colDetails,
     mosaicDetails,
@@ -270,6 +304,7 @@ export async function renderInventory(root) {
     },
   });
   category.addEventListener("change", refresh);
+  provider.addEventListener("change", refresh);
   await mountFieldFilters(filterHost, {
     scope: "inventario",
     onChange(next) {
@@ -277,5 +312,4 @@ export async function renderInventory(root) {
       return refresh();
     },
   });
-  await mountEntrada(entradaHost, { onSaved: refresh });
 }

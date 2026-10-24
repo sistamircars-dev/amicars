@@ -79,7 +79,7 @@ export function createCombo({
   const element = h("div", { class: "combo" }, input);
 
   function paintInput() {
-    if (!input.isConnected || (document.activeElement === input && filtering)) {
+    if (input.isConnected && document.activeElement === input && filtering) {
       return;
     }
     const found = choices.find((opt) => opt.value === selected);

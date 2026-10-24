@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_wtf import FlaskForm
 from wtforms import PasswordField, StringField
 from wtforms.validators import DataRequired, Email, Length
 
 from app.decorators import login_required
-from app.extensions import limiter
+from app.extensions import csrf, limiter
 from app.schemas import LoginIn
 from app.supabase_client import make_client
 
@@ -42,7 +42,7 @@ def _set_auth_cookies(response, session) -> None:
         response.set_cookie(
             cfg["JWT_REFRESH_COOKIE_NAME"],
             refresh,
-            max_age=int(timedelta(days=14).total_seconds()),
+            max_age=int(timedelta(days=90).total_seconds()),
             **cookie_kw,
         )
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
@@ -101,6 +101,26 @@ def login():
         return render_template("login.html", form=form), 401
 
     response = redirect(url_for("panel.index"))
+    _set_auth_cookies(response, session)
+    return response
+
+
+@bp.post("/api/auth/refresh")
+@csrf.exempt
+@limiter.limit("20 per minute")
+def refresh_session():
+    cfg = current_app.config
+    token = request.cookies.get(cfg["JWT_REFRESH_COOKIE_NAME"])
+    if not token:
+        return jsonify({"ok": False, "error": "Sin sesión local"}), 401
+    try:
+        result = make_client().auth.refresh_session(token)
+    except Exception:
+        return jsonify({"ok": False, "error": "No se pudo renovar la sesión"}), 401
+    session = getattr(result, "session", None)
+    if session is None:
+        return jsonify({"ok": False, "error": "Sesión inválida"}), 401
+    response = jsonify({"ok": True})
     _set_auth_cookies(response, session)
     return response
 

@@ -20,6 +20,8 @@ const LOCAL_STATE = ["sync_queue", "offline_media_queue", "meta"];
 
 export const BACKUP_FORMAT = "amircars-local-backup";
 export const BACKUP_VERSION = 1;
+export const ARCHIVE_FORMAT = "amircars-disk-archive";
+export const ARCHIVE_VERSION = 1;
 export const BACKUP_TABLES = [
   ...ENTITY_BACKUP,
   ...ENTITY_TABLES.filter((name) => !ENTITY_BACKUP.includes(name)),
@@ -60,7 +62,7 @@ function blobFromRecord(record) {
   return new Blob([bytes], { type });
 }
 
-async function encodeValue(value) {
+export async function encodeValue(value) {
   if (value === null || value === undefined) {
     return value;
   }
@@ -92,7 +94,7 @@ async function encodeValue(value) {
   return value;
 }
 
-function decodeValue(value) {
+export function decodeValue(value) {
   if (value === null || value === undefined) {
     return value;
   }
@@ -164,17 +166,25 @@ export function exportLocalBackup() {
   return exportTables(db);
 }
 
-export function downloadBackup(payload) {
+function triggerDownload(payload, filename) {
   const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = backupFilename(payload);
+  link.download = filename;
   link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+export function downloadBackup(payload) {
+  triggerDownload(payload, backupFilename(payload));
+}
+
+export function downloadArchiveFile(payload) {
+  triggerDownload(payload, archiveFilename("historico"));
 }
 
 export async function restoreBackupInto(targetDb, source) {
@@ -194,4 +204,56 @@ export async function restoreBackupInto(targetDb, source) {
 
 export function restoreLocalBackup(source) {
   return restoreBackupInto(db, source);
+}
+
+export function archiveFilename(kind = "historico") {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return `amircars-${kind}-${stamp}.json`;
+}
+
+export async function buildDiskArchive(tables, extra = {}) {
+  const encoded = {};
+  for (const [name, rows] of Object.entries(tables)) {
+    encoded[name] = await encodeValue(rows);
+  }
+  return {
+    format: ARCHIVE_FORMAT,
+    version: ARCHIVE_VERSION,
+    archived_at: new Date().toISOString(),
+    reason: extra.reason || "memoria-local-90",
+    tables: encoded,
+  };
+}
+
+export function readDiskArchive(source) {
+  let data = source;
+  if (typeof source === "string") {
+    data = JSON.parse(source);
+  }
+  if (!data || data.format !== ARCHIVE_FORMAT || data.version !== ARCHIVE_VERSION) {
+    throw new Error("El archivo no es un histórico de AMIRCARS.");
+  }
+  if (!data.tables || typeof data.tables !== "object") {
+    throw new Error("El histórico no contiene tablas.");
+  }
+  return data;
+}
+
+export async function restoreDiskArchive(source) {
+  const payload = readDiskArchive(source);
+  let rows = 0;
+  const names = Object.keys(payload.tables);
+  await db.transaction("rw", names.filter((name) => db.tables.some((table) => table.name === name)), async () => {
+    for (const name of names) {
+      if (!db.tables.some((table) => table.name === name)) {
+        continue;
+      }
+      const decoded = payload.tables[name].map(decodeValue);
+      if (decoded.length) {
+        await db.table(name).bulkPut(decoded);
+        rows += decoded.length;
+      }
+    }
+  });
+  return { rows, tables: names.length, archived_at: payload.archived_at };
 }

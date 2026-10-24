@@ -1,6 +1,8 @@
-import { matchesQuery } from "./catalog.js";
+import { matchesQuery, requestRestock } from "./catalog.js";
 import { db } from "./db.js";
 import { h } from "./dom.js";
+import { backfillSupplierLinks, formatDisplayDate } from "./movements.js?v=36";
+import { openProductForm } from "./productForm.js?v=37";
 import { deactivateLocal, hardDeleteLocal, saveLocal } from "./repository.js";
 
 function providerForm(existing) {
@@ -62,6 +64,7 @@ export async function renderProveedores(root) {
   let editing = null;
   let formOpen = false;
   let expandedId = null;
+  let minsEditingId = null;
   let query = "";
   let refreshToken = 0;
 
@@ -93,8 +96,27 @@ export async function renderProveedores(root) {
     return ids;
   }
 
-  function detailNodes(row, productos, links) {
-    const activeProducts = productos.filter((product) => product.is_active !== false);
+  function lastOrderDate(product, moves) {
+    const dates = moves
+      .filter((move) => move.producto_id === product.id && (move.tipo === "entrada" || move.payload?.origen === "entrada"))
+      .map((move) => move.fecha_llegada || move.payload?.fecha_llegada || move.fecha)
+      .filter(Boolean)
+      .sort()
+      .reverse();
+    return dates[0] ? formatDisplayDate(dates[0]) : "—";
+  }
+
+  function minimumOf(product, link) {
+    if (product && product.stock_minimo !== null && product.stock_minimo !== undefined && product.stock_minimo !== "") {
+      return product.stock_minimo;
+    }
+    if (link && link.stock_minimo !== null && link.stock_minimo !== undefined && link.stock_minimo !== "") {
+      return link.stock_minimo;
+    }
+    return "—";
+  }
+
+  function detailNodes(row, productos, links, moves, solicitudes) {
     const rowLinks = links.filter((link) => link.proveedor_id === row.id && link.is_active !== false);
     const shown = new Map();
     productos
@@ -104,51 +126,123 @@ export async function renderProveedores(root) {
       const product = productos.find((item) => item.id === link.producto_id) || shown.get(link.producto_id)?.product;
       shown.set(link.producto_id, { product, link });
     });
-    const select = h("select", { class: "app-select" }, h("option", { value: "" }, "Seleccione un repuesto"));
-    activeProducts.forEach((product) => select.append(h("option", { value: product.id }, productLabel(product))));
-    const minimum = h("input", { class: "app-input", type: "number", min: "0", step: "1", placeholder: "Mínimo de este proveedor" });
-    const linkBtn = h("button", { class: "btn small", type: "button" }, "Vincular");
-    linkBtn.addEventListener("click", async () => {
-      if (!select.value) {
-        status.textContent = "Elija el repuesto que compra a este proveedor.";
-        return;
-      }
-      const existing = await db.producto_proveedores.filter((item) => item.proveedor_id === row.id && item.producto_id === select.value).first();
-      await saveLocal("producto_proveedores", {
-        ...(existing || {}),
-        producto_id: select.value,
-        proveedor_id: row.id,
-        stock_minimo: minimum.value.trim() === "" ? null : Number(minimum.value),
-        is_active: true,
+    moves
+      .filter((move) => move.tipo === "entrada" && move.proveedor_id === row.id && move.producto_id)
+      .forEach((move) => {
+        if (shown.has(move.producto_id)) {
+          return;
+        }
+        shown.set(move.producto_id, {
+          product: productos.find((item) => item.id === move.producto_id) || null,
+          link: null,
+        });
       });
-      status.textContent = "Repuesto vinculado. Ese mínimo se usa si el producto no tiene uno propio.";
+    const items = [...shown.values()];
+    const editingMins = minsEditingId === row.id;
+    const drafts = new Map();
+    items.forEach(({ product, link }) => {
+      if (product) {
+        drafts.set(product.id, String(minimumOf(product, link) === "—" ? "" : minimumOf(product, link)));
+      }
+    });
+    const saveMins = h("button", { class: "btn small", type: "button" }, "Guardar");
+    saveMins.disabled = !editingMins;
+    saveMins.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      for (const { product, link } of items) {
+        if (!product) {
+          continue;
+        }
+        const raw = drafts.get(product.id);
+        const stockMinimo = String(raw ?? "").trim() === "" ? null : Number(raw);
+        await saveLocal("productos", { ...product, stock_minimo: stockMinimo });
+        const existing = link || (await db.producto_proveedores.filter((item) => item.proveedor_id === row.id && item.producto_id === product.id).first());
+        await saveLocal("producto_proveedores", {
+          ...(existing || {}),
+          producto_id: product.id,
+          proveedor_id: row.id,
+          stock_minimo: stockMinimo,
+          is_active: true,
+        });
+      }
+      minsEditingId = null;
+      status.textContent = "Stock mínimo registrado.";
       refresh();
     });
-    const items = [...shown.values()];
     return h(
       "div",
       { class: "supplier-detail" },
-      h("h3", {}, "Productos vinculados"),
+      h("div", { class: "supplier-detail-head" }, h("h3", {}, "Productos de las facturas"), saveMins),
       items.length
         ? h(
-            "ul",
-            { class: "link-list" },
-            ...items.map(({ product, link }) => {
-              const unlink = link
-                ? h("button", { class: "btn small ghost", type: "button" }, "Quitar vínculo")
-                : null;
-              if (unlink) {
-                unlink.addEventListener("click", async () => {
-                  await hardDeleteLocal("producto_proveedores", link.id);
-                  status.textContent = "Vínculo eliminado.";
-                  refresh();
-                });
-              }
-              return h("li", {}, `${productLabel(product)} · mínimo ${link && link.stock_minimo != null ? link.stock_minimo : "—"}`, unlink);
-            })
+            "div",
+            { class: "table-wrap" },
+            h(
+              "table",
+              { class: "data-table ops-table" },
+              h(
+                "thead",
+                {},
+                h(
+                  "tr",
+                  {},
+                  h("th", {}, "Producto"),
+                  h("th", {}, "Stock mínimo"),
+                  h("th", {}, "Último pedido"),
+                  h("th", {}, "Stock"),
+                  h("th", {}, "")
+                )
+              ),
+              h(
+                "tbody",
+                {},
+                ...items.map(({ product, link }) => {
+                  if (!product) {
+                    return h("tr", {}, h("td", { colspan: "5" }, "Repuesto no encontrado"));
+                  }
+                  const pending = solicitudes.some((item) => item.producto_id === product.id) || product.solicitar_restock;
+                  const editProduct = h("button", { class: "btn small ghost", type: "button", title: "Editar producto", "aria-label": "Editar producto" }, "✎");
+                  editProduct.addEventListener("click", async (event) => {
+                    event.stopPropagation();
+                    if (await openProductForm(product)) {
+                      refresh();
+                    }
+                  });
+                  const minInput = h("input", {
+                    class: "app-input order-qty",
+                    type: "number",
+                    min: "0",
+                    step: "1",
+                    "aria-label": `Stock mínimo de ${product.descripcion}`,
+                  });
+                  minInput.value = drafts.get(product.id) || "";
+                  minInput.disabled = !editingMins;
+                  minInput.addEventListener("click", (event) => event.stopPropagation());
+                  minInput.addEventListener("input", () => {
+                    drafts.set(product.id, minInput.value);
+                  });
+                  const ask = h("button", { class: "btn small ghost", type: "button" }, pending ? "En sugerencia" : "Enviar a pedido");
+                  ask.disabled = pending;
+                  ask.addEventListener("click", async (event) => {
+                    event.stopPropagation();
+                    await requestRestock(product, "Solicitud desde proveedores");
+                    status.textContent = `${product.descripcion} pasó a sugerencia de pedido.`;
+                    refresh();
+                  });
+                  return h(
+                    "tr",
+                    {},
+                    h("td", {}, h("div", { class: "product-line-name" }, editProduct, productLabel(product))),
+                    h("td", {}, minInput),
+                    h("td", {}, lastOrderDate(product, moves)),
+                    h("td", {}, String(product.stock ?? 0)),
+                    h("td", {}, ask)
+                  );
+                })
+              )
+            )
           )
-        : h("p", { class: "muted" }, "Este proveedor todavía no tiene repuestos vinculados."),
-      h("div", { class: "form-grid" }, h("label", { class: "field-row" }, "Repuesto", select), h("label", { class: "field-row" }, "Mínimo", minimum), linkBtn)
+        : h("p", { class: "muted" }, "Todavía no hay productos cargados en facturas de este proveedor.")
     );
   }
 
@@ -210,9 +304,12 @@ export async function renderProveedores(root) {
 
   async function refresh() {
     const token = ++refreshToken;
+    await backfillSupplierLinks();
     const proveedores = (await db.proveedores.toArray()).sort((a, b) => a.razon_social.localeCompare(b.razon_social, "es"));
     const productos = await db.productos.toArray();
     const links = await db.producto_proveedores.toArray();
+    const moves = await db.movimientos_inventario.toArray();
+    const solicitudes = await db.solicitudes_restock.filter((row) => row.estado === "pendiente" && row.is_active !== false).toArray();
     if (token !== refreshToken) {
       return;
     }
@@ -225,10 +322,8 @@ export async function renderProveedores(root) {
       const remove = h("button", { class: "btn small danger", type: "button" }, "Eliminar");
       edit.addEventListener("click", (event) => {
         event.stopPropagation();
-        editing = row;
-        formOpen = true;
         expandedId = row.id;
-        paintForm();
+        minsEditingId = minsEditingId === row.id ? null : row.id;
         refresh();
       });
       remove.addEventListener("click", async (event) => {
@@ -268,11 +363,14 @@ export async function renderProveedores(root) {
           return;
         }
         expandedId = expandedId === row.id ? null : row.id;
+        if (expandedId !== row.id) {
+          minsEditingId = null;
+        }
         refresh();
       });
       rows.push(tr);
       if (open) {
-        rows.push(h("tr", { class: "supplier-detail-row" }, h("td", { colspan: "5" }, detailNodes(row, productos, links))));
+        rows.push(h("tr", { class: "supplier-detail-row" }, h("td", { colspan: "5" }, detailNodes(row, productos, links, moves, solicitudes))));
       }
     });
     listHost.replaceChildren(

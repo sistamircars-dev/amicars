@@ -6,7 +6,7 @@
   --red: #d90429;
   --red-hot: #ef233c;
   --white: #ffffff;
-  --glass: rgba(18, 19, 24, 0.75);
+  --glass: rgba(18, 19, 24, 0.62);
   --glass-border: rgba(255, 255, 255, 0.12);
   --muted: rgba(255, 255, 255, 0.68);
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
@@ -163,7 +163,10 @@ textarea.app-input {
     transition: grid-template-columns 0.16s ease;
   }
 
-  .app-shell.sidebar-hot,
+  .app-shell.sidebar-hot {
+    grid-template-columns: var(--sidebar) minmax(0, 1fr);
+  }
+
   .app-shell:has(.sidebar:hover),
   .app-shell:has(.sidebar:focus-within) {
     grid-template-columns: var(--sidebar) minmax(0, 1fr);
@@ -171,8 +174,14 @@ textarea.app-input {
 
   .app-shell:not(.sidebar-hot):not(:has(.sidebar:hover)):not(:has(.sidebar:focus-within)) .sidebar-head,
   .app-shell:not(.sidebar-hot):not(:has(.sidebar:hover)):not(:has(.sidebar:focus-within)) .nav-label,
-  .app-shell:not(.sidebar-hot):not(:has(.sidebar:hover)):not(:has(.sidebar:focus-within)) .logout-form span {
+  .app-shell:not(.sidebar-hot):not(:has(.sidebar:hover)):not(:has(.sidebar:focus-within)) .logout-form span:not(.nav-icon) {
     display: none;
+  }
+
+  .app-shell:not(.sidebar-hot):not(:has(.sidebar:hover)):not(:has(.sidebar:focus-within)) .nav-btn,
+  .app-shell:not(.sidebar-hot):not(:has(.sidebar:hover)):not(:has(.sidebar:focus-within)) .logout-form .btn {
+    justify-content: center;
+    padding-inline: 0.45rem;
   }
 }
 
@@ -276,6 +285,9 @@ textarea.app-input {
 
 .nav-btn {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
   text-align: left;
   background: transparent;
   color: var(--white);
@@ -283,6 +295,14 @@ textarea.app-input {
   border-radius: 12px;
   padding: 0.65rem 0.7rem;
   cursor: pointer;
+}
+
+.nav-icon {
+  width: 1.4rem;
+  flex: 0 0 1.4rem;
+  text-align: center;
+  font-size: 1.05rem;
+  line-height: 1;
 }
 
 .nav-btn.active,
@@ -390,7 +410,7 @@ textarea.app-input {
   background: rgba(0, 0, 0, 0.55);
   display: grid;
   place-items: center;
-  z-index: 40;
+  z-index: 100;
 }
 
 .modal {

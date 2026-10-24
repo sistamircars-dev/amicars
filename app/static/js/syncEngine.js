@@ -1,5 +1,7 @@
-import { healthCheck, pullChanges, pushQueue, uploadMediaBlob } from "./api.js";
+import { healthCheck, pullChanges, pushQueue, refreshSession, uploadMediaBlob } from "./api.js";
+import { flushCloudPurge } from "./archiveVault.js";
 import { db, ENTITY_TABLES, PUSH_ORDER, getMeta, pendingCount, setMeta } from "./db.js";
+import { applyRemoteRevision } from "./pwa.js";
 import { enqueue, saveLocal } from "./repository.js";
 import { bindRetry, setSyncStatus } from "./syncStatus.js";
 
@@ -98,13 +100,15 @@ async function flushQueue() {
 async function mergePull(tables) {
   const queued = await db.sync_queue.toArray();
   const blocked = new Set(queued.map((row) => `${row.table}:${row.entity_id}`));
+  const archived = (await getMeta("archived_ids", {})) || {};
   for (const table of ENTITY_TABLES) {
     const rows = (tables && tables[table]) || [];
+    const gone = new Set(archived[table] || []);
     for (const row of rows) {
       if (!row || !row.id) {
         continue;
       }
-      if (blocked.has(`${table}:${row.id}`)) {
+      if (gone.has(row.id) || blocked.has(`${table}:${row.id}`)) {
         continue;
       }
       const local = await db.table(table).get(row.id);
@@ -143,9 +147,12 @@ export async function runSync(force = false) {
     if (!alive) {
       throw new Error("Sin heartbeat");
     }
+    await refreshSession();
     await flushMedia();
     await flushQueue();
     await pullRemote();
+    await flushCloudPurge();
+    await applyRemoteRevision();
     const leftover = await pendingCount();
     if (leftover.total > 0) {
       setSyncStatus("retry");
