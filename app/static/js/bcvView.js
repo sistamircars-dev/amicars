@@ -1,11 +1,11 @@
 import { fetchBcvDate, fetchBcvToday } from "./api.js";
-import { archiveStatus, restoreHistoryFromFile, runArchiveIfNeeded } from "./archiveVault.js?v=50";
+import { archiveStatus, restoreHistoryFromFile, runArchiveIfNeeded } from "./archiveVault.js?v=51";
 import { createDateField } from "./dateField.js?v=34";
-import { pickArchiveDir } from "./diskStore.js?v=50";
+import { pickArchiveDir } from "./diskStore.js?v=51";
 import { h } from "./dom.js";
 import { countBackupRows, downloadBackup, exportLocalBackup, restoreLocalBackup } from "./localBackup.js";
 import { formatDisplayDate, formatRate } from "./movements.js";
-import { downloadClientScript, runInstallSetup } from "./pwa.js?v=50";
+import { downloadClientScript, runInstallSetup } from "./pwa.js?v=51";
 import { getConfig, getTasa, setConfig, upsertTasa } from "./store.js";
 import { runSync } from "./syncEngine.js";
 

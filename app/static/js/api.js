@@ -90,6 +90,10 @@ export async function pullChanges(since) {
 
 export async function uploadMediaBlob(blob, filename, imageId = null) {
   const form = new FormData();
+  const csrf = getCsrfToken();
+  if (csrf) {
+    form.append("csrf_token", csrf);
+  }
   form.append("file", blob, filename || "pieza.jpg");
   if (imageId) {
     form.append("image_id", imageId);

@@ -31,6 +31,7 @@ class HealthOut(StrictModel):
     status: Literal["online"]
     service: str
     revision: str = "43"
+    cloudinary: bool = False
 
 
 class ArchivePurgeItem(StrictModel):

@@ -34,21 +34,27 @@ export async function upsertTasa(data) {
     throw new Error("La tasa no tiene fecha.");
   }
   const rate = Number(data.usd_ves);
-  const all = await db.tasas_bcv.toArray();
-  const twins = all.filter((row) => isoDate(row.fecha) === fecha);
+  if (!Number.isFinite(rate) || rate <= 0) {
+    throw new Error("La tasa del día no es válida.");
+  }
+  const twins = (await db.tasas_bcv.toArray())
+    .filter((row) => isoDate(row.fecha) === fecha)
+    .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
   const existing = twins[0] || null;
   for (const extra of twins.slice(1)) {
     await db.tasas_bcv.delete(extra.id);
-  }
-  if (existing && Number(existing.usd_ves) === rate) {
-    if (isoDate(existing.fecha) !== fecha) {
-      await db.tasas_bcv.update(existing.id, { fecha });
+    const queued = await db.sync_queue.where("entity_id").equals(extra.id).toArray();
+    for (const item of queued) {
+      await db.sync_queue.delete(item.id);
     }
+  }
+  if (existing && Number(existing.usd_ves) === rate && isoDate(existing.fecha) === fecha) {
     return existing;
   }
   return saveLocal(
     "tasas_bcv",
     {
+      ...(existing || {}),
       id: existing ? existing.id : newId(),
       fecha,
       usd_ves: rate,
@@ -60,11 +66,12 @@ export async function upsertTasa(data) {
 }
 
 export async function getTasa(fecha) {
-  if (fecha) {
-    return db.tasas_bcv.where("fecha").equals(fecha).first();
+  const wanted = isoDate(fecha);
+  const all = await db.tasas_bcv.toArray();
+  if (wanted) {
+    return all.find((row) => isoDate(row.fecha) === wanted) || null;
   }
-  const all = await db.tasas_bcv.orderBy("fecha").reverse().toArray();
-  return all[0] || null;
+  return all.sort((a, b) => isoDate(b.fecha).localeCompare(isoDate(a.fecha)))[0] || null;
 }
 
 export async function getPrefs() {

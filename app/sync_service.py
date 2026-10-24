@@ -34,6 +34,8 @@ def sanitize_row(table: str, payload: dict[str, Any], entity_id: str) -> dict[st
         row["user_id"] = _user_id()
     for dropped in STRIP_ON_PUSH.get(table, ()):
         row.pop(dropped, None)
+    if table == "tasas_bcv" and row.get("fecha"):
+        row["fecha"] = str(row["fecha"])[:10]
     return row
 
 
@@ -93,6 +95,14 @@ def apply_push(raw: dict[str, Any]) -> dict[str, Any]:
                 client.table(item.table).delete().eq("id", item.id).execute()
                 accepted.append(item.id)
                 continue
+            if item.table == "tasas_bcv" and row.get("fecha"):
+                row["fecha"] = str(row["fecha"])[:10]
+                target_id = _merge_on_unique(client, "tasas_bcv", row)
+                if target_id:
+                    accepted.append(item.id)
+                    if target_id != item.id:
+                        remaps.append({"table": "tasas_bcv", "from": item.id, "to": target_id})
+                    continue
             if item.table in IMMUTABLE_TABLES:
                 existing = (
                     client.table(item.table).select("id").eq("id", item.id).limit(1).execute()

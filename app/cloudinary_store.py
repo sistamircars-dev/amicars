@@ -8,30 +8,53 @@ import cloudinary.uploader
 from cloudinary.utils import cloudinary_url
 from flask import current_app
 
+FOLDER = "amircars/repuestos"
+
+
+def _clean(value: str | None) -> str:
+    return (value or "").strip().strip('"').strip("'")
+
+
+def cloudinary_settings() -> dict[str, str]:
+    url = _clean(current_app.config.get("CLOUDINARY_URL"))
+    name = _clean(current_app.config.get("CLOUDINARY_CLOUD_NAME"))
+    key = _clean(current_app.config.get("CLOUDINARY_API_KEY"))
+    secret = _clean(current_app.config.get("CLOUDINARY_API_SECRET"))
+    if url.startswith("cloudinary://") and "@" in url:
+        return {"cloudinary_url": url}
+    if name and key and secret:
+        return {"cloud_name": name, "api_key": key, "api_secret": secret}
+    return {}
+
 
 def cloudinary_ready() -> bool:
-    return bool(current_app.config.get("CLOUDINARY_URL"))
+    return bool(cloudinary_settings())
 
 
 def _configure() -> None:
-    url = current_app.config.get("CLOUDINARY_URL") or ""
-    if not url:
-        raise RuntimeError("CLOUDINARY_URL no está configurada")
-    cloudinary.config(cloudinary_url=url, secure=True)
+    settings = cloudinary_settings()
+    if not settings:
+        raise RuntimeError("Cloudinary no está configurada en el servidor")
+    cloudinary.config(secure=True, **settings)
 
 
 def upload_image_bytes(raw: bytes, public_id: str | None = None) -> dict[str, Any]:
     _configure()
     options: dict[str, Any] = {
-        "folder": "amircars/repuestos",
         "resource_type": "image",
         "unique_filename": True,
         "use_filename": False,
         "overwrite": False,
         "invalidate": False,
+        "folder": FOLDER,
     }
     if public_id:
-        options["public_id"] = public_id
+        cleaned = public_id.strip().lstrip("/")
+        if cleaned.startswith(f"{FOLDER}/"):
+            options.pop("folder", None)
+            options["public_id"] = cleaned
+        else:
+            options["public_id"] = cleaned.split("/")[-1]
         options["unique_filename"] = False
         options["overwrite"] = True
         options["invalidate"] = True

@@ -26,7 +26,12 @@ class Config:
 
     SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
-    CLOUDINARY_URL = os.getenv("CLOUDINARY_URL", "")
+    CLOUDINARY_URL = (os.getenv("CLOUDINARY_URL") or "").strip().strip('"').strip("'")
+    CLOUDINARY_CLOUD_NAME = (os.getenv("CLOUDINARY_CLOUD_NAME") or os.getenv("CLOUD_NAME") or "").strip()
+    CLOUDINARY_API_KEY = (
+        os.getenv("CLOUDINARY_API_KEY") or os.getenv("CLOUDINARY_KEY") or os.getenv("CLOUDINARY_APIKEY") or ""
+    ).strip()
+    CLOUDINARY_API_SECRET = (os.getenv("CLOUDINARY_API_SECRET") or os.getenv("CLOUDINARY_SECRET") or "").strip()
 
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise RuntimeError("SUPABASE_URL and SUPABASE_KEY are required")

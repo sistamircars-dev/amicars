@@ -233,9 +233,11 @@ export async function attachPhotos(productoId, files) {
         });
         stored = true;
         needsCover = false;
-      } else if (result.status === 400) {
-        notes.push((result.data && result.data.error) || `${file.name} fue rechazada`);
-        continue;
+      } else if (result.status === 400 || result.status === 502 || result.status === 503) {
+        notes.push((result.data && result.data.error) || `${file.name} no se pudo subir`);
+        if (result.status === 400) {
+          continue;
+        }
       }
     }
     if (!stored) {

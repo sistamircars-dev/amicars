@@ -1,2 +1,2 @@
-APP_REVISION = "50"
+APP_REVISION = "51"
 APP_SERVICE = "amircars"
