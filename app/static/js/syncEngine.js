@@ -7,11 +7,83 @@ import { bindRetry, setSyncStatus } from "./syncStatus.js";
 
 const BATCH = 40;
 const HEARTBEAT_MS = 25000;
+const REFRESH_LEAD_MS = 5 * 60 * 1000;
 let running = false;
 let timer = null;
 
 function isOnline() {
   return navigator.onLine;
+}
+
+function sessionNeedsRefresh() {
+  const raw = document.cookie
+    .split("; ")
+    .find((part) => part.startsWith("amircars_session_exp="));
+  if (!raw) {
+    return true;
+  }
+  const value = decodeURIComponent(raw.slice("amircars_session_exp=".length));
+  const expires = Date.parse(value);
+  if (!Number.isFinite(expires)) {
+    return true;
+  }
+  return expires - Date.now() < REFRESH_LEAD_MS;
+}
+
+async function ensureSession() {
+  if (!sessionNeedsRefresh()) {
+    return true;
+  }
+  const session = await refreshSession();
+  return Boolean(session && session.ok);
+}
+
+async function applyRemaps(remaps) {
+  for (const remap of remaps || []) {
+    if (!remap || !remap.table || !remap.from || !remap.to || remap.from === remap.to) {
+      continue;
+    }
+    if (!ENTITY_TABLES.includes(remap.table)) {
+      continue;
+    }
+    const table = db.table(remap.table);
+    const local = await table.get(remap.from);
+    const remote = await table.get(remap.to);
+    if (local && !remote) {
+      await table.put({ ...local, id: remap.to });
+    }
+    if (local) {
+      await table.delete(remap.from);
+    }
+    const queued = await db.sync_queue.where("entity_id").equals(remap.from).toArray();
+    for (const row of queued) {
+      await db.sync_queue.delete(row.id);
+    }
+  }
+}
+
+async function dropDuplicateTasas() {
+  const rows = await db.tasas_bcv.toArray();
+  const seen = new Map();
+  for (const row of rows) {
+    const fecha = String(row.fecha || "").slice(0, 10);
+    if (!fecha) {
+      continue;
+    }
+    const prev = seen.get(fecha);
+    if (!prev) {
+      seen.set(fecha, row);
+      continue;
+    }
+    const keep = String(prev.updated_at || "") >= String(row.updated_at || "") ? prev : row;
+    const drop = keep === prev ? row : prev;
+    seen.set(fecha, keep);
+    const queued = await db.sync_queue.where("entity_id").equals(drop.id).toArray();
+    for (const item of queued) {
+      await db.sync_queue.delete(item.id);
+    }
+    await db.tasas_bcv.delete(drop.id);
+  }
 }
 
 async function refreshOfflineBadge() {
@@ -80,15 +152,21 @@ async function flushQueue() {
     if (!result.ok || !result.data) {
       throw new Error((result.data && result.data.error) || `Push HTTP ${result.status}`);
     }
+    await applyRemaps(result.data.remaps || []);
     const done = new Set([...(result.data.accepted || []), ...(result.data.duplicates || [])]);
     const rejected = new Map((result.data.rejected || []).map((row) => [row.id, row.error]));
     for (const row of slice) {
       if (done.has(row.entity_id)) {
         await db.sync_queue.delete(row.id);
       } else if (rejected.has(row.entity_id)) {
+        const err = String(rejected.get(row.entity_id) || "");
+        if (/23505|duplicate|unique/i.test(err) && row.table === "tasas_bcv") {
+          await db.sync_queue.delete(row.id);
+          continue;
+        }
         await db.sync_queue.update(row.id, {
           attempts: (row.attempts || 0) + 1,
-          last_error: rejected.get(row.entity_id),
+          last_error: err,
         });
       }
     }
@@ -129,6 +207,7 @@ async function pullRemote() {
     throw new Error((result.data && result.data.error) || `Pull HTTP ${result.status}`);
   }
   await mergePull(result.data.tables);
+  await dropDuplicateTasas();
   if (result.data.server_time) {
     await setMeta("last_pull_at", result.data.server_time);
   }
@@ -149,8 +228,8 @@ export async function runSync(force = false) {
     if (!alive) {
       throw new Error("Sin heartbeat");
     }
-    const session = await refreshSession();
-    if (!session.ok) {
+    const sessionOk = await ensureSession();
+    if (!sessionOk) {
       throw new Error("Sesión expirada; vuelva a entrar.");
     }
     await flushMedia();

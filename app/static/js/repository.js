@@ -11,6 +11,9 @@ function cloneRecord(record) {
 }
 
 export async function enqueue(table, op, record) {
+  if (table === "movimientos_inventario" && op !== "insert") {
+    return;
+  }
   if (table === "producto_imagenes" && op !== "delete") {
     const url = String(record.cloudinary_url || "").trim();
     const pid = String(record.cloudinary_public_id || "").trim();

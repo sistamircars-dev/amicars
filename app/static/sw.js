@@ -1,4 +1,4 @@
-const CACHE = "amircars-offline-v38";
+const CACHE = "amircars-offline-v39";
 const PRECACHE = [
   "/offline.html",
   "/manifest.json",

@@ -23,14 +23,35 @@ export async function setConfig(clave, valor) {
   );
 }
 
+function isoDate(value) {
+  const match = String(value || "").match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : "";
+}
+
 export async function upsertTasa(data) {
-  const existing = await db.tasas_bcv.where("fecha").equals(data.fecha).first();
+  const fecha = isoDate(data.fecha);
+  if (!fecha) {
+    throw new Error("La tasa no tiene fecha.");
+  }
+  const rate = Number(data.usd_ves);
+  const all = await db.tasas_bcv.toArray();
+  const twins = all.filter((row) => isoDate(row.fecha) === fecha);
+  const existing = twins[0] || null;
+  for (const extra of twins.slice(1)) {
+    await db.tasas_bcv.delete(extra.id);
+  }
+  if (existing && Number(existing.usd_ves) === rate) {
+    if (isoDate(existing.fecha) !== fecha) {
+      await db.tasas_bcv.update(existing.id, { fecha });
+    }
+    return existing;
+  }
   return saveLocal(
     "tasas_bcv",
     {
       id: existing ? existing.id : newId(),
-      fecha: data.fecha,
-      usd_ves: Number(data.usd_ves),
+      fecha,
+      usd_ves: rate,
       fuente: data.fuente || "BCV",
       is_active: true,
     },

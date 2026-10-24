@@ -42,6 +42,32 @@ def _sort_items(items: list[SyncPushItem]) -> list[SyncPushItem]:
     return sorted(items, key=lambda item: (rank.get(item.table, 99), item.updated_at))
 
 
+_UNIQUE_FALLBACK = {
+    "tasas_bcv": "fecha",
+    "proveedores": "codigo_proveedor",
+    "preferencias_usuario": "user_id",
+    "configuracion_sistema": "clave",
+}
+
+
+def _is_unique_conflict(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "duplicate" in message or "unique" in message or "23505" in message
+
+
+def _merge_on_unique(client, table: str, row: dict[str, Any]) -> str | None:
+    column = _UNIQUE_FALLBACK.get(table)
+    if not column or row.get(column) in (None, ""):
+        return None
+    existing = client.table(table).select("id").eq(column, row[column]).limit(1).execute()
+    if not existing.data:
+        return None
+    target_id = existing.data[0]["id"]
+    patch = {key: value for key, value in row.items() if key != "id"}
+    client.table(table).update(patch).eq("id", target_id).execute()
+    return str(target_id)
+
+
 def apply_push(raw: dict[str, Any]) -> dict[str, Any]:
     try:
         body = SyncPushIn.model_validate(raw)
@@ -52,20 +78,18 @@ def apply_push(raw: dict[str, Any]) -> dict[str, Any]:
     accepted: list[str] = []
     duplicates: list[str] = []
     rejected: list[dict[str, str]] = []
+    remaps: list[dict[str, str]] = []
 
     for item in _sort_items(body.items):
         if item.table not in COLUMNS:
             rejected.append({"id": item.id, "error": "Tabla no permitida"})
             continue
         if item.table in IMMUTABLE_TABLES and item.op in {"update", "delete"}:
-            rejected.append({"id": item.id, "error": "Bitácora inmutable"})
+            duplicates.append(item.id)
             continue
         try:
             row = sanitize_row(item.table, item.payload, item.id)
             if item.op == "delete":
-                if item.table in IMMUTABLE_TABLES:
-                    rejected.append({"id": item.id, "error": "Bitácora inmutable"})
-                    continue
                 client.table(item.table).delete().eq("id", item.id).execute()
                 accepted.append(item.id)
                 continue
@@ -80,14 +104,23 @@ def apply_push(raw: dict[str, Any]) -> dict[str, Any]:
                     client.table(item.table).insert(row).execute()
                     accepted.append(item.id)
                 except Exception as exc:
-                    message = str(exc).lower()
-                    if "duplicate" in message or "unique" in message or "23505" in message:
+                    if _is_unique_conflict(exc):
                         duplicates.append(item.id)
                     else:
                         raise
                 continue
-            client.table(item.table).upsert(row, on_conflict="id").execute()
-            accepted.append(item.id)
+            try:
+                client.table(item.table).upsert(row, on_conflict="id").execute()
+                accepted.append(item.id)
+            except Exception as exc:
+                if not _is_unique_conflict(exc):
+                    raise
+                target_id = _merge_on_unique(client, item.table, row)
+                if not target_id:
+                    raise
+                accepted.append(item.id)
+                if target_id != item.id:
+                    remaps.append({"table": item.table, "from": item.id, "to": target_id})
         except Exception as exc:
             rejected.append({"id": item.id, "error": str(exc)[:280]})
 
@@ -97,6 +130,7 @@ def apply_push(raw: dict[str, Any]) -> dict[str, Any]:
         "accepted": accepted,
         "duplicates": duplicates,
         "rejected": rejected,
+        "remaps": remaps,
         "server_time": utc_now(),
     }, 200
 
