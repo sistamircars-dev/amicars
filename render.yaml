@@ -1,7 +1,7 @@
 # AMIRCARS en Render — conecta el repo GitHub y define secretos en el panel.
 services:
   - type: web
-    name: amicars
+    name: amircars
     runtime: python
     plan: free
     branch: main
