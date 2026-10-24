@@ -1,0 +1,733 @@
+.hero-search {
+  margin-bottom: 1rem;
+}
+
+.search-wrap {
+  position: relative;
+}
+
+.word-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.word-chip {
+  border: 1px solid rgba(142, 154, 175, 0.45);
+  background: rgba(31, 40, 51, 0.8);
+  color: var(--white);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+}
+
+.suggest-list {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  margin-top: 0.35rem;
+  max-height: 320px;
+  overflow: auto;
+  padding: 0.35rem;
+}
+
+.suggest-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+}
+
+.suggest-open {
+  cursor: pointer;
+}
+
+.suggest-open:hover {
+  background: rgba(217, 4, 41, 0.16);
+}
+
+.suggest-empty,
+.suggest-empty .suggest-text {
+  color: #d5dbe3;
+  background: transparent;
+}
+
+.suggest-empty {
+  background: rgba(213, 219, 227, 0.14);
+}
+
+.suggest-empty:hover {
+  background: rgba(213, 219, 227, 0.22);
+}
+
+.suggest-empty-note {
+  padding: 0.7rem;
+  color: var(--muted);
+}
+
+.float-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.9rem;
+}
+
+.float-card {
+  text-align: left;
+  color: inherit;
+  padding: 0.8rem;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.float-card:hover {
+  transform: translateY(-10px);
+}
+
+.float-frame {
+  display: block;
+  height: 140px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(11, 12, 16, 0.45);
+}
+
+.float-photo {
+  width: 100%;
+  height: calc(100% + 20px);
+  margin-top: -10px;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  animation: amircars-float 3.4s ease-in-out infinite;
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.35));
+}
+
+.float-photo[src*="/img/amircars/logo."] {
+  height: 100%;
+  margin-top: 0;
+  padding: 0.35rem;
+  object-fit: contain;
+}
+
+.float-card:hover .float-photo {
+  animation-play-state: paused;
+  transform: translateY(-6px);
+}
+
+.float-caption {
+  display: block;
+  margin-top: 0.45rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.float-card:hover .float-caption {
+  white-space: normal;
+  overflow: visible;
+}
+
+@keyframes amircars-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.toolbar,
+.filter-checks,
+.filter-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.filter-box {
+  margin: 0.4rem 0 0.8rem;
+}
+
+.filter-field {
+  min-width: 160px;
+  margin: 0;
+}
+
+.check {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.inv-group {
+  margin-bottom: 1.2rem;
+}
+
+.inv-group h3,
+.inv-sub h4 {
+  margin: 0.4rem 0;
+}
+
+.inv-group.inactive {
+  opacity: 0.6;
+}
+
+.table-wrap {
+  overflow: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.55rem 0.45rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table tr.stock-zero td {
+  color: #d5dbe3;
+  background: rgba(213, 219, 227, 0.1);
+}
+
+.data-table tr.stock-zero,
+.data-table tr.supplier-row {
+  cursor: pointer;
+}
+
+.data-table tr.supplier-row:hover td {
+  background: rgba(217, 4, 41, 0.08);
+}
+
+.supplier-detail-row td {
+  background: rgba(11, 12, 16, 0.35);
+}
+
+.supplier-detail h3 {
+  margin: 0.2rem 0 0.6rem;
+}
+
+.mosaic {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.8rem;
+}
+
+.mosaic-card {
+  padding: 0.7rem;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.mosaic-card:hover {
+  transform: translateY(-8px);
+}
+
+.mosaic-photo {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  object-position: center;
+  background: rgba(11, 12, 16, 0.45);
+  border-radius: 12px;
+}
+
+.mosaic-photo[src*="/img/amircars/logo."] {
+  object-fit: contain;
+}
+
+.mosaic-meta p {
+  margin: 0.25rem 0;
+  font-size: 0.86rem;
+}
+
+.mosaic-card.stock-zero {
+  color: #d5dbe3;
+  background: rgba(213, 219, 227, 0.12);
+}
+
+.mosaic-card.stock-zero .mosaic-meta,
+.mosaic-card.stock-zero .mosaic-meta p {
+  color: #d5dbe3;
+}
+
+.mosaic-card.stock-zero .mosaic-photo {
+  filter: grayscale(0.45);
+  opacity: 0.88;
+}
+
+.ficha-sin-stock,
+.ficha-sin-stock h3,
+.ficha-sin-stock p,
+.ficha-sin-stock li {
+  color: #d5dbe3;
+}
+
+.ficha-sin-stock .zoom-base,
+.ficha-sin-stock .detail-thumb {
+  filter: grayscale(0.4);
+}
+
+.sin-stock-tag {
+  display: inline-block;
+  margin: 0 0 0.4rem;
+  color: #d5dbe3;
+  letter-spacing: 0.04em;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.7rem;
+}
+
+.span-2 {
+  grid-column: 1 / -1;
+}
+
+.modal.wide {
+  width: min(960px, calc(100% - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+
+.detail-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.1fr) minmax(220px, 0.9fr);
+  gap: 1rem;
+}
+
+.zoom-stage {
+  position: relative;
+  height: min(420px, 60vh);
+  min-height: 220px;
+  background: rgba(11, 12, 16, 0.45);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.zoom-base {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+}
+
+.zoom-base[src*="/img/amircars/logo."] {
+  object-fit: contain;
+}
+
+.zoom-lens {
+  position: absolute;
+  width: 170px;
+  height: 170px;
+  border: 2px solid #8e9aaf;
+  border-radius: 8px;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  z-index: 2;
+}
+
+.zoom-minimap {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 84px;
+  height: 84px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(11, 12, 16, 0.72);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.zoom-minimap img {
+  position: absolute;
+  max-width: none;
+  object-fit: fill;
+}
+
+.zoom-rect {
+  position: absolute;
+  border: 1px solid #ef233c;
+  background: rgba(217, 4, 41, 0.28);
+}
+
+.thumb-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+
+.detail-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.detail-thumb[src*="/img/amircars/logo."] {
+  object-fit: contain;
+}
+
+.attr-list {
+  margin: 0.4rem 0;
+  padding-left: 1.1rem;
+}
+
+.sheet-compact {
+  width: 100%;
+}
+
+.entrada-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.45rem 0.7rem;
+  align-items: start;
+}
+
+.entrada-fields .field-row,
+.campo-form .field-row {
+  margin-bottom: 0;
+}
+
+.field-row[hidden],
+.campo-form[hidden],
+.supplier-extra[hidden],
+.entrada-photo[hidden] {
+  display: none !important;
+}
+
+.entrada-fields .supplier-extra {
+  grid-column: 1 / -1;
+}
+
+.date-readout {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.proveedor-line {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.proveedor-line .combo {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.proveedor-line .btn {
+  flex: 0 0 auto;
+}
+
+.campo-form {
+  margin: 0.45rem 0;
+}
+
+.ops-toolbar {
+  margin: 0.45rem 0;
+}
+
+.ops-table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.ops-table .app-input,
+.ops-table .combo-input {
+  min-width: 0;
+  width: 100%;
+  padding: 0.35rem 0.45rem;
+}
+
+.ops-table input[type="number"] {
+  width: 6.4rem;
+}
+
+.ops-table th,
+.ops-table td {
+  vertical-align: middle;
+}
+
+.th-field {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.cell-bs {
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.cell-bs small {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.col-remove {
+  width: 4.5rem;
+}
+
+.combo {
+  position: relative;
+  min-width: 0;
+}
+
+.combo-list {
+  position: fixed;
+  z-index: 80;
+  max-height: 240px;
+  margin-top: 0;
+}
+
+.combo-active {
+  background: rgba(217, 4, 41, 0.2);
+}
+
+.line-photo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.line-photo-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.paste-box {
+  margin-top: 0.7rem;
+}
+
+.paste-box textarea {
+  margin: 0.4rem 0;
+}
+
+.ops-board {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-top: 0.8rem;
+}
+
+.bulk-grid,
+.photo-pool {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.8rem;
+}
+
+.bulk-row,
+.pool-card {
+  padding: 0.7rem;
+}
+
+.pool-card {
+  color: inherit;
+  background: rgba(18, 19, 24, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.pool-card.selected {
+  border-color: #d90429;
+  box-shadow: 0 0 0 1px #d90429;
+}
+
+.pool-photo {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 10px;
+  background: rgba(11, 12, 16, 0.45);
+}
+
+.pool-photo[src*="/img/amircars/logo."] {
+  object-fit: contain;
+}
+
+.link-list {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+}
+
+.link-list li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin: 0.35rem 0;
+}
+
+@media (max-width: 800px) {
+  .detail-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.entrada-panel {
+  margin: 0 0 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.entrada-panel h3 {
+  margin: 0 0 0.35rem;
+}
+
+.cat-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.cat-rail {
+  padding: 0.75rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  position: sticky;
+  top: 0.4rem;
+}
+
+.cat-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-bottom: 0.15rem;
+}
+
+.cat-scheme {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.cat-node-row {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.cat-node-row.inactive {
+  opacity: 0.55;
+}
+
+.cat-node {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 0.45rem 0.55rem;
+  cursor: pointer;
+}
+
+.cat-node.sub {
+  margin-left: 0.85rem;
+}
+
+.cat-node.active,
+.cat-node:hover {
+  background: rgba(217, 4, 41, 0.16);
+  border-color: rgba(217, 4, 41, 0.45);
+}
+
+.cat-tools {
+  display: flex;
+  gap: 0.15rem;
+  flex: 0 0 auto;
+}
+
+.cat-plus {
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  line-height: 1;
+}
+
+.cat-work {
+  min-width: 0;
+}
+
+.photo-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 7rem;
+}
+
+.photo-chip {
+  display: inline-flex;
+  cursor: zoom-in;
+}
+
+.photo-mini {
+  width: 42px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+  background: rgba(11, 12, 16, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.photo-hover {
+  position: fixed;
+  z-index: 90;
+  width: 168px;
+  height: 168px;
+  object-fit: contain;
+  background: rgba(11, 12, 16, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+
+@media (max-width: 860px) {
+  .cat-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .cat-rail {
+    position: static;
+    max-height: 280px;
+  }
+}

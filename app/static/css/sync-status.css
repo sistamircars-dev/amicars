@@ -1,0 +1,20 @@
+#sync-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.9rem;
+}
+
+#sync-indicator .sync-icon {
+  line-height: 1;
+}
+
+#sync-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 0;
+}

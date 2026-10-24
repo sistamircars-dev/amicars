@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AMIRCARS — Panel</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#D90429" />
+    <meta name="csrf-token" content="{{ csrf_token() }}" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=13" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/catalog.css') }}?v=15" />
+  </head>
+  <body class="app-body">
+    <div class="app-shell" id="app-shell">
+      <header class="topbar">
+        <div class="brand-mark">
+          <button type="button" id="sync-indicator" data-state="unknown" aria-live="polite">
+            <span class="sync-icon">🟠</span>
+            <span class="sync-label">Iniciando…</span>
+          </button>
+        </div>
+        <div class="topbar-center">
+          <div class="rate-chip" id="rate-chip">Tasa BCV: —</div>
+        </div>
+        <img class="topbar-logo" src="{{ url_for('static', filename='img/amircars/logo.png') }}" alt="AMIRCARS" />
+      </header>
+      <aside class="glass sidebar" id="sidebar">
+        <div class="sidebar-head">
+          <img class="sidebar-logo" src="{{ url_for('static', filename='img/amircars/logo.png') }}" alt="" />
+        </div>
+        <nav class="nav-list" id="nav-list"></nav>
+        <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <button class="btn ghost" type="submit"><span>Salir</span></button>
+        </form>
+      </aside>
+      <main class="glass panel-main" id="view-root"></main>
+    </div>
+    <script src="{{ url_for('static', filename='vendor/dexie.min.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
+  </body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AMIRCARS — Acceso</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#D90429" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=13" />
+  </head>
+  <body class="login-body">
+    <main class="login-wrap">
+      <section class="glass login-card">
+        <img class="login-logo" src="{{ url_for('static', filename='img/amircars/logo.png') }}" alt="AMIRCARS" />
+        <h1>AMIRCARS</h1>
+        <p>Lubricantes · Filtros · Repuestos</p>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <ul class="flash-list">
+              {% for category, message in messages %}
+                <li>{{ message }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        {% endwith %}
+        <form method="post" action="{{ url_for('auth.login') }}" autocomplete="off">
+          {{ form.csrf_token }}
+          <label>
+            Correo
+            {{ form.email(class_="app-input") }}
+          </label>
+          <label>
+            Contraseña
+            {{ form.password(class_="app-input") }}
+          </label>
+          <button class="btn" type="submit">Entrar al panel</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

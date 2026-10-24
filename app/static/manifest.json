@@ -1,0 +1,19 @@
+{
+  "name": "AMIRCARS — Control de Inventario",
+  "short_name": "AMIRCARS",
+  "description": "Inventario automotriz offline-first",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0B0C10",
+  "theme_color": "#D90429",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/static/img/amircars/pwa-icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

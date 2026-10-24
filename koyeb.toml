@@ -1,0 +1,8 @@
+[app]
+name = "amircars"
+
+[env]
+FLASK_DEBUG = "0"
+FORCE_HTTPS = "true"
+COOKIE_SECURE = "true"
+PYTHONUNBUFFERED = "1"

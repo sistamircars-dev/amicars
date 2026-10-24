@@ -1,0 +1,440 @@
+:root {
+  --bg-deep: #0b0c10;
+  --bg-panel: #121318;
+  --steel: #1f2833;
+  --metal: #8e9aaf;
+  --red: #d90429;
+  --red-hot: #ef233c;
+  --white: #ffffff;
+  --glass: rgba(18, 19, 24, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --muted: rgba(255, 255, 255, 0.68);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  --radius: 18px;
+  --sidebar: 300px;
+  --sidebar-collapsed: 78px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  color: var(--white);
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: var(--bg-deep);
+}
+
+body.app-body,
+body.login-body {
+  min-height: 100vh;
+  background-color: var(--bg-deep);
+  background-image:
+    linear-gradient(90deg, rgba(11, 12, 16, 0.88) 0%, rgba(11, 12, 16, 0.62) 42%, rgba(11, 12, 16, 0.42) 100%),
+    url("/static/img/amircars/fondo.jpg?v=14");
+  background-repeat: no-repeat, no-repeat;
+  background-size: cover, cover;
+  background-position: center, center;
+  background-attachment: fixed, fixed;
+}
+
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 0.55rem 0.9rem;
+  color: var(--white);
+  background: linear-gradient(180deg, var(--red-hot), var(--red));
+  cursor: pointer;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.btn:hover {
+  filter: brightness(1.08);
+}
+
+.btn.ghost,
+.btn-ghost {
+  background: rgba(31, 40, 51, 0.8);
+  border-color: rgba(142, 154, 175, 0.45);
+}
+
+.btn.danger {
+  background: transparent;
+  border-color: rgba(217, 4, 41, 0.7);
+  color: #ffd7de;
+}
+
+.btn.small {
+  padding: 0.28rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.login-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+}
+
+.login-card {
+  width: min(460px, 100%);
+  padding: 2rem 1.6rem 1.6rem;
+  text-align: center;
+}
+
+.login-logo {
+  width: min(280px, 80%);
+  height: auto;
+  margin: 0 auto 1rem;
+  display: block;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
+}
+
+.login-card h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  letter-spacing: 0.16em;
+}
+
+.login-card p {
+  margin: 0 0 1.2rem;
+  color: var(--muted);
+}
+
+.login-card form {
+  display: grid;
+  gap: 0.85rem;
+  text-align: left;
+}
+
+.login-card label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--metal);
+}
+
+.login-card input,
+.app-input,
+.app-select,
+textarea.app-input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(142, 154, 175, 0.45);
+  background: rgba(11, 12, 16, 0.72);
+  color: var(--white);
+  padding: 0.7rem 0.8rem;
+}
+
+.flash-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  color: #ffb4c0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: var(--sidebar) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "topbar topbar"
+    "sidebar main";
+}
+
+@media (min-width: 961px) {
+  .app-shell {
+    grid-template-columns: var(--sidebar-collapsed) minmax(0, 1fr);
+    transition: grid-template-columns 0.16s ease;
+  }
+
+  .app-shell.sidebar-hot,
+  .app-shell:has(.sidebar:hover),
+  .app-shell:has(.sidebar:focus-within) {
+    grid-template-columns: var(--sidebar) minmax(0, 1fr);
+  }
+
+  .app-shell:not(.sidebar-hot):not(:has(.sidebar:hover)):not(:has(.sidebar:focus-within)) .sidebar-head,
+  .app-shell:not(.sidebar-hot):not(:has(.sidebar:hover)):not(:has(.sidebar:focus-within)) .nav-label,
+  .app-shell:not(.sidebar-hot):not(:has(.sidebar:hover)):not(:has(.sidebar:focus-within)) .logout-form span {
+    display: none;
+  }
+}
+
+.topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.7rem 1rem;
+  background: rgba(11, 12, 16, 0.72);
+  border-bottom: 1px solid var(--glass-border);
+  backdrop-filter: blur(14px);
+}
+
+.brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.brand-mark strong {
+  letter-spacing: 0.12em;
+}
+
+.topbar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.rate-chip {
+  border: 1px solid rgba(142, 154, 175, 0.35);
+  background: rgba(31, 40, 51, 0.65);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.topbar-logo {
+  width: 72px;
+  height: auto;
+  margin-left: auto;
+}
+
+#sync-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  cursor: pointer;
+}
+
+.workspace {
+  display: contents;
+}
+
+.panel-main {
+  grid-area: main;
+  margin: 1rem;
+  padding: 1.1rem;
+  min-width: 0;
+  min-height: calc(100vh - 92px);
+}
+
+.panel-main.panel-compact {
+  min-height: 0;
+  align-self: start;
+}
+
+.sidebar {
+  grid-area: sidebar;
+  margin: 1rem 0 1rem 1rem;
+  padding: 1rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  min-height: calc(100vh - 92px);
+}
+
+.sidebar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sidebar-logo {
+  width: 92px;
+  height: auto;
+}
+
+.nav-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.nav-btn {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: var(--white);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 0.65rem 0.7rem;
+  cursor: pointer;
+}
+
+.nav-btn.active,
+.nav-btn:hover {
+  background: rgba(217, 4, 41, 0.16);
+  border-color: rgba(217, 4, 41, 0.45);
+}
+
+.view-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.view-title h2 {
+  margin: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.9rem;
+}
+
+.cat-card {
+  padding: 0.9rem;
+  transition: transform 0.2s ease;
+}
+
+.cat-card:hover {
+  transform: translateY(-6px);
+}
+
+.cat-thumb {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  object-position: center;
+  background: rgba(11, 12, 16, 0.5);
+  border-radius: 12px;
+}
+
+.cat-thumb[src*="/img/amircars/logo."] {
+  object-fit: contain;
+}
+
+.accordion {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.acc-item {
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(11, 12, 16, 0.35);
+}
+
+.acc-item.inactive {
+  opacity: 0.55;
+}
+
+.acc-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.7rem 0.8rem;
+}
+
+.acc-row button.toggle {
+  flex: 1;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.acc-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.acc-body {
+  padding: 0 0.8rem 0.8rem 1.2rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.nested {
+  border-left: 1px solid rgba(142, 154, 175, 0.25);
+  padding-left: 0.7rem;
+}
+
+.modal-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: grid;
+  place-items: center;
+  z-index: 40;
+}
+
+.modal {
+  width: min(480px, calc(100% - 2rem));
+  padding: 1.2rem;
+}
+
+.modal h3 {
+  margin-top: 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.field-row {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.7rem;
+}
+
+.empty {
+  padding: 1.4rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+@media (max-width: 960px) {
+  .app-shell,
+  .app-shell.sidebar-hot {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "topbar"
+      "main"
+      "sidebar";
+  }
+  .sidebar {
+    margin: 0 1rem 1rem;
+    min-height: auto;
+  }
+  .topbar-logo {
+    width: 54px;
+  }
+}
