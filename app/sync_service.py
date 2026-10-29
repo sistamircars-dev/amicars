@@ -36,6 +36,8 @@ def sanitize_row(table: str, payload: dict[str, Any], entity_id: str) -> dict[st
         row.pop(dropped, None)
     if table == "tasas_bcv" and row.get("fecha"):
         row["fecha"] = str(row["fecha"])[:10]
+    if table == "proveedores" and row.get("codigo_proveedor"):
+        row["codigo_proveedor"] = str(row["codigo_proveedor"]).strip()
     return row
 
 
@@ -68,17 +70,40 @@ _NULLABLE_FKS = {
     "historico_ref": ("movimiento_id",),
 }
 
+_FK_COLS = ("categoria_id", "subcategoria_id", "proveedor_id", "producto_id")
+
 
 def _null_broken_fks(table: str, row: dict[str, Any], exc: Exception) -> bool:
     message = str(exc).lower()
+    cols = _NULLABLE_FKS.get(table, ())
     changed = False
-    for column in _NULLABLE_FKS.get(table, ()):
+    for column in cols:
         if row.get(column) in (None, ""):
             continue
         if column in message or f"{table}_{column}" in message:
             row[column] = None
             changed = True
+    if changed:
+        return True
+    for column in cols:
+        if row.get(column) in (None, ""):
+            continue
+        row[column] = None
+        changed = True
     return changed
+
+
+def _rewrite_with_remaps(payload: dict[str, Any], remaps: list[dict[str, str]]) -> dict[str, Any]:
+    row = dict(payload)
+    for remap in remaps:
+        frm = str(remap.get("from") or "").lower()
+        to = str(remap.get("to") or "")
+        if not frm or not to:
+            continue
+        for column in _FK_COLS:
+            if str(row.get(column) or "").lower() == frm:
+                row[column] = to
+    return row
 
 
 def _merge_on_unique(client, table: str, row: dict[str, Any]) -> str | None:
@@ -110,11 +135,15 @@ def apply_push(raw: dict[str, Any]) -> dict[str, Any]:
         if item.table not in COLUMNS:
             rejected.append({"id": item.id, "error": "Tabla no permitida"})
             continue
+        if any(remap["table"] == item.table and remap["from"] == item.id for remap in remaps):
+            accepted.append(item.id)
+            continue
         if item.table in IMMUTABLE_TABLES and item.op in {"update", "delete"}:
             duplicates.append(item.id)
             continue
         try:
-            row = sanitize_row(item.table, item.payload, item.id)
+            payload = _rewrite_with_remaps(item.payload, remaps)
+            row = sanitize_row(item.table, payload, item.id)
             if item.op == "delete":
                 client.table(item.table).delete().eq("id", item.id).execute()
                 accepted.append(item.id)
@@ -138,7 +167,10 @@ def apply_push(raw: dict[str, Any]) -> dict[str, Any]:
                     client.table(item.table).insert(row).execute()
                     accepted.append(item.id)
                 except Exception as exc:
-                    if _is_unique_conflict(exc):
+                    if _is_fk_error(exc) and _null_broken_fks(item.table, row, exc):
+                        client.table(item.table).insert(row).execute()
+                        accepted.append(item.id)
+                    elif _is_unique_conflict(exc):
                         duplicates.append(item.id)
                     else:
                         raise

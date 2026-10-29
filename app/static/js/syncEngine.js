@@ -213,11 +213,100 @@ function isFkError(err) {
   return /23503|foreign key/i.test(err || "");
 }
 
+async function canonicalProveedor(row) {
+  const codigo = String((row && row.codigo_proveedor) || "").trim().toLowerCase();
+  if (!codigo) {
+    return row;
+  }
+  const same = (await db.proveedores.toArray())
+    .filter((item) => String(item.codigo_proveedor || "").trim().toLowerCase() === codigo)
+    .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+  return same[0] || row;
+}
+
+async function collapseDuplicateProveedores() {
+  const rows = await db.proveedores.toArray();
+  const groups = new Map();
+  for (const row of rows) {
+    const codigo = String(row.codigo_proveedor || "").trim().toLowerCase();
+    if (!codigo) {
+      continue;
+    }
+    const list = groups.get(codigo) || [];
+    list.push(row);
+    groups.set(codigo, list);
+  }
+  for (const list of groups.values()) {
+    if (list.length < 2) {
+      continue;
+    }
+    list.sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+    const keep = list[0];
+    for (const drop of list.slice(1)) {
+      await rewriteRefs("proveedores", drop.id, keep.id);
+      await db.proveedores.delete(drop.id);
+    }
+  }
+}
+
+async function ensureParents() {
+  const queued = await db.sync_queue.toArray();
+  const seen = new Set(queued.map((row) => `${row.table}:${row.entity_id}`));
+  const wanted = [];
+  for (const row of queued) {
+    const payload = row.payload || {};
+    if (payload.proveedor_id) {
+      wanted.push(["proveedores", payload.proveedor_id]);
+    }
+    if (payload.producto_id) {
+      wanted.push(["productos", payload.producto_id]);
+    }
+    if (payload.categoria_id) {
+      wanted.push(["categorias", payload.categoria_id]);
+    }
+    if (payload.subcategoria_id) {
+      wanted.push(["subcategorias", payload.subcategoria_id]);
+    }
+  }
+  for (const [table, id] of wanted) {
+    const key = `${table}:${id}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    const rec = await db.table(table).get(id);
+    if (!rec) {
+      continue;
+    }
+    await enqueue(table, "update", rec);
+    seen.add(key);
+  }
+}
+
 async function softenPayload(row, err) {
   if (!isFkError(err)) {
     return false;
   }
+  const attempts = row.attempts || 0;
   const payload = { ...(row.payload || {}) };
+  if (payload.proveedor_id) {
+    const parent = await db.proveedores.get(payload.proveedor_id);
+    if (parent && attempts < 1) {
+      const canon = await canonicalProveedor(parent);
+      if (canon.id !== parent.id) {
+        payload.proveedor_id = canon.id;
+        payload.updated_at = nowIso();
+        const local = await db.table(row.table).get(row.entity_id);
+        if (local) {
+          await db.table(row.table).put({ ...local, proveedor_id: canon.id, updated_at: payload.updated_at });
+        }
+        await db.sync_queue.update(row.id, { payload, updated_at: payload.updated_at, attempts: attempts + 1, last_error: err });
+        return true;
+      }
+      await enqueue("proveedores", "update", parent);
+      await db.sync_queue.update(row.id, { attempts: attempts + 1, last_error: err });
+      return true;
+    }
+  }
   const optional = {
     productos: ["proveedor_id", "categoria_id", "subcategoria_id"],
     movimientos_inventario: ["proveedor_id"],
@@ -225,103 +314,78 @@ async function softenPayload(row, err) {
   const cols = optional[row.table] || [];
   let changed = false;
   for (const col of cols) {
-    if (payload[col] && (err.includes(col) || err.includes(`${row.table}_${col}`))) {
-      if (col === "proveedor_id" && payload.proveedor_id) {
-        const parent = await db.proveedores.get(payload.proveedor_id);
-        if (parent) {
-          await enqueue("proveedores", "update", parent);
-          return true;
-        }
-      }
-      if (col === "categoria_id" && payload.categoria_id) {
-        const parent = await db.categorias.get(payload.categoria_id);
-        if (parent) {
-          await enqueue("categorias", "update", parent);
-          return true;
-        }
-      }
-      if (col === "subcategoria_id" && payload.subcategoria_id) {
-        const parent = await db.subcategorias.get(payload.subcategoria_id);
-        if (parent) {
-          await enqueue("subcategorias", "update", parent);
-          return true;
-        }
-      }
+    if (payload[col]) {
       payload[col] = null;
       changed = true;
     }
   }
-  if (!changed && row.table === "productos" && payload.proveedor_id) {
-    const parent = await db.proveedores.get(payload.proveedor_id);
-    if (parent) {
-      await enqueue("proveedores", "update", parent);
-      return true;
+  if (changed) {
+    payload.updated_at = nowIso();
+    const local = await db.table(row.table).get(row.entity_id);
+    if (local) {
+      await db.table(row.table).put({ ...local, ...payload });
     }
-    payload.proveedor_id = null;
-    changed = true;
+    await db.sync_queue.update(row.id, { payload, updated_at: payload.updated_at, attempts: attempts + 1, last_error: err });
+    return true;
   }
-  if (!changed) {
-    return false;
+  if (row.table === "producto_proveedores" && attempts >= 2) {
+    await db.sync_queue.delete(row.id);
+    return true;
   }
-  payload.updated_at = nowIso();
-  const local = await db.table(row.table).get(row.entity_id);
-  if (local) {
-    await db.table(row.table).put({ ...local, ...payload });
-  }
-  await db.sync_queue.update(row.id, { payload, updated_at: payload.updated_at, last_error: err });
-  return true;
+  await db.sync_queue.update(row.id, { attempts: attempts + 1, last_error: err });
+  return attempts < 3;
 }
 
 async function flushQueue() {
-  for (let round = 0; round < 8; round += 1) {
+  await collapseDuplicateProveedores();
+  for (let round = 0; round < 12; round += 1) {
+    await ensureParents();
     const all = await latestQueue();
     if (!all.length) {
       return;
     }
+    const slice = all.slice(0, BATCH);
+    const items = slice.map((row) => {
+      const updated = (row.payload && row.payload.updated_at) || row.updated_at || nowIso();
+      return {
+        id: row.entity_id,
+        table: row.table,
+        op: row.op,
+        payload: { ...(row.payload || {}), id: row.entity_id, updated_at: updated },
+        updated_at: updated,
+      };
+    });
+    const result = await pushQueue(items);
+    if (result.status === 401) {
+      throw new Error("Sesión expirada; vuelva a entrar.");
+    }
+    if (!result.data || result.status >= 500) {
+      throw new Error((result.data && result.data.error) || `Push HTTP ${result.status}`);
+    }
+    await applyRemaps(result.data.remaps || []);
+    const done = new Set([...(result.data.accepted || []), ...(result.data.duplicates || [])]);
+    const rejected = new Map((result.data.rejected || []).map((row) => [row.id, row.error]));
     let progressed = false;
-    for (let offset = 0; offset < all.length; offset += BATCH) {
-      const slice = all.slice(offset, offset + BATCH);
-      const items = slice.map((row) => {
-        const updated = (row.payload && row.payload.updated_at) || row.updated_at || nowIso();
-        return {
-          id: row.entity_id,
-          table: row.table,
-          op: row.op,
-          payload: { ...(row.payload || {}), id: row.entity_id, updated_at: updated },
-          updated_at: updated,
-        };
+    for (const row of slice) {
+      if (done.has(row.entity_id)) {
+        await db.sync_queue.delete(row.id);
+        progressed = true;
+        continue;
+      }
+      const err = String(rejected.get(row.entity_id) || result.data.error || "");
+      if (/23505|duplicate|unique/i.test(err) && (row.table === "tasas_bcv" || row.table === "preferencias_usuario" || row.table === "configuracion_sistema")) {
+        await db.sync_queue.delete(row.id);
+        progressed = true;
+        continue;
+      }
+      if (await softenPayload(row, err)) {
+        progressed = true;
+        continue;
+      }
+      await db.sync_queue.update(row.id, {
+        attempts: (row.attempts || 0) + 1,
+        last_error: err || "Rechazado",
       });
-      const result = await pushQueue(items);
-      if (result.status === 401) {
-        throw new Error("Sesión expirada; vuelva a entrar.");
-      }
-      if (!result.data || result.status >= 500) {
-        throw new Error((result.data && result.data.error) || `Push HTTP ${result.status}`);
-      }
-      await applyRemaps(result.data.remaps || []);
-      const done = new Set([...(result.data.accepted || []), ...(result.data.duplicates || [])]);
-      const rejected = new Map((result.data.rejected || []).map((row) => [row.id, row.error]));
-      for (const row of slice) {
-        if (done.has(row.entity_id)) {
-          await db.sync_queue.delete(row.id);
-          progressed = true;
-          continue;
-        }
-        const err = String(rejected.get(row.entity_id) || result.data.error || "");
-        if (/23505|duplicate|unique/i.test(err) && (row.table === "tasas_bcv" || row.table === "preferencias_usuario" || row.table === "configuracion_sistema")) {
-          await db.sync_queue.delete(row.id);
-          progressed = true;
-          continue;
-        }
-        if (await softenPayload(row, err)) {
-          progressed = true;
-          continue;
-        }
-        await db.sync_queue.update(row.id, {
-          attempts: (row.attempts || 0) + 1,
-          last_error: err || "Rechazado",
-        });
-      }
     }
     if (!progressed) {
       return;
@@ -368,13 +432,48 @@ async function pullRemote(full = false) {
   }
 }
 
+async function pendingHint() {
+  const ops = await db.sync_queue.toArray();
+  const media = await db.offline_media_queue.toArray();
+  const labels = {
+    productos: "artículos",
+    proveedores: "proveedores",
+    producto_proveedores: "vínculos de proveedor",
+    movimientos_inventario: "movimientos",
+    historico_ref: "histórico",
+    producto_imagenes: "fotos",
+    tasas_bcv: "tasas",
+  };
+  const parts = [];
+  const byTable = {};
+  for (const row of ops) {
+    byTable[row.table] = (byTable[row.table] || 0) + 1;
+  }
+  Object.entries(byTable).forEach(([table, count]) => {
+    parts.push(`${count} ${labels[table] || table}`);
+  });
+  if (media.length) {
+    parts.push(`${media.length} foto${media.length === 1 ? "" : "s"}`);
+  }
+  const err =
+    (ops.find((row) => row.last_error) || {}).last_error ||
+    (media.find((row) => row.last_error) || {}).last_error ||
+    "";
+  const detail = String(err).slice(0, 160);
+  if (!parts.length) {
+    return detail;
+  }
+  return detail ? `${parts.join(", ")} — ${detail}` : parts.join(", ");
+}
+
 async function statusFromCounts(counts, hint = "") {
+  const title = hint || (counts.total > 0 ? await pendingHint() : "");
   if (!isOnline()) {
-    setSyncStatus("offline", counts.total > 0 ? String(counts.total) : "", hint);
+    setSyncStatus("offline", counts.total > 0 ? String(counts.total) : "", title);
     return;
   }
   if (counts.total > 0) {
-    setSyncStatus("pending", String(counts.total), hint);
+    setSyncStatus("pending", String(counts.total), title);
     return;
   }
   setSyncStatus("connected");
@@ -411,12 +510,7 @@ export async function runSync(force = false) {
     await flushCloudPurge();
     await applyRemoteRevision();
     const leftover = await pendingCount();
-    const stuck = leftover.ops
-      ? await db.sync_queue.orderBy("created_at").first()
-      : leftover.media
-        ? await db.offline_media_queue.orderBy("created_at").first()
-        : null;
-    await statusFromCounts(leftover, stuck && stuck.last_error ? String(stuck.last_error).slice(0, 180) : "");
+    await statusFromCounts(leftover);
   } catch (err) {
     const counts = await pendingCount();
     const detail = String(err && err.message ? err.message : err);
