@@ -50,6 +50,20 @@ def upload():
                 "(CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET), "
                 "o pegue la URL completa del dashboard de Cloudinary."
             )
+        elif "invalid signature" in low:
+            message = (
+                "Cloudinary reconoció la API key, pero el API Secret no coincide. "
+                "En Render, CLOUDINARY_API_KEY debe ser el número y CLOUDINARY_API_SECRET "
+                "la clave larga del mismo producto en console.cloudinary.com (API Keys). "
+                "No mezcle cuentas ni deje espacios o saltos de línea."
+            )
+        elif "invalid signature" in low:
+            message = (
+                "Cloudinary reconoció la API key, pero el API Secret no coincide. "
+                "En Render, CLOUDINARY_API_KEY debe ser el número y CLOUDINARY_API_SECRET "
+                "la clave larga del mismo producto en console.cloudinary.com (API Keys). "
+                "No mezcle cuentas ni deje espacios o saltos de línea."
+            )
         else:
             message = (
                 "Cloudinary no aceptó la subida. En Render use CLOUDINARY_URL "

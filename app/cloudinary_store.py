@@ -29,8 +29,19 @@ _PLACEHOLDERS = {
 
 def _clean(value: str | None) -> str:
     text = (value or "").strip().strip('"').strip("'")
-    if text.upper().startswith("CLOUDINARY_URL="):
-        text = text.split("=", 1)[1].strip().strip('"').strip("'")
+    upper = text.upper()
+    for prefix in (
+        "CLOUDINARY_URL=",
+        "CLOUDINARY_API_KEY=",
+        "CLOUDINARY_API_SECRET=",
+        "CLOUDINARY_CLOUD_NAME=",
+        "CLOUD_NAME=",
+        "API_KEY=",
+        "API_SECRET=",
+    ):
+        if upper.startswith(prefix):
+            text = text.split("=", 1)[1].strip().strip('"').strip("'")
+            break
     text = text.replace("\n", "").replace("\r", "").strip()
     folded = text.lower().strip("<>").strip()
     if folded in _PLACEHOLDERS or folded.startswith("your_") or folded.startswith("<your_"):
@@ -58,9 +69,13 @@ def cloudinary_settings() -> dict[str, str]:
     secret = _clean(current_app.config.get("CLOUDINARY_API_SECRET"))
     from_url = _parse_url(url)
     if from_url:
-        return from_url
-    if url and not url.startswith("cloudinary://") and "://" not in url and len(url) >= 16 and not secret:
+        name = from_url["cloud_name"]
+        key = from_url["api_key"]
+        secret = from_url["api_secret"]
+    elif url and not url.startswith("cloudinary://") and "://" not in url and len(url) >= 16 and not secret:
         secret = url
+    if key and secret and (not key.isdigit()) and secret.isdigit() and len(secret) >= 10:
+        key, secret = secret, key
     if name and key and secret:
         return {"cloud_name": name, "api_key": key, "api_secret": secret}
     return {}
