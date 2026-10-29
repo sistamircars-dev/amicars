@@ -57,6 +57,30 @@ def _is_unique_conflict(exc: Exception) -> bool:
     return "duplicate" in message or "unique" in message or "23505" in message
 
 
+def _is_fk_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "foreign key" in message or "23503" in message
+
+
+_NULLABLE_FKS = {
+    "productos": ("categoria_id", "subcategoria_id", "proveedor_id"),
+    "movimientos_inventario": ("proveedor_id",),
+    "historico_ref": ("movimiento_id",),
+}
+
+
+def _null_broken_fks(table: str, row: dict[str, Any], exc: Exception) -> bool:
+    message = str(exc).lower()
+    changed = False
+    for column in _NULLABLE_FKS.get(table, ()):
+        if row.get(column) in (None, ""):
+            continue
+        if column in message or f"{table}_{column}" in message:
+            row[column] = None
+            changed = True
+    return changed
+
+
 def _merge_on_unique(client, table: str, row: dict[str, Any]) -> str | None:
     column = _UNIQUE_FALLBACK.get(table)
     if not column or row.get(column) in (None, ""):
@@ -123,6 +147,10 @@ def apply_push(raw: dict[str, Any]) -> dict[str, Any]:
                 client.table(item.table).upsert(row, on_conflict="id").execute()
                 accepted.append(item.id)
             except Exception as exc:
+                if _is_fk_error(exc) and _null_broken_fks(item.table, row, exc):
+                    client.table(item.table).upsert(row, on_conflict="id").execute()
+                    accepted.append(item.id)
+                    continue
                 if not _is_unique_conflict(exc):
                     raise
                 target_id = _merge_on_unique(client, item.table, row)
@@ -134,9 +162,8 @@ def apply_push(raw: dict[str, Any]) -> dict[str, Any]:
         except Exception as exc:
             rejected.append({"id": item.id, "error": str(exc)[:280]})
 
-    progressed = len(accepted) + len(duplicates)
     return {
-        "ok": progressed > 0 or not body.items,
+        "ok": True,
         "accepted": accepted,
         "duplicates": duplicates,
         "rejected": rejected,

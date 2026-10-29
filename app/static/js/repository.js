@@ -22,6 +22,12 @@ export async function enqueue(table, op, record) {
     }
   }
   const payload = cloneRecord(record);
+  const pending = await db.sync_queue.where("entity_id").equals(payload.id).toArray();
+  for (const row of pending) {
+    if (row.table === table) {
+      await db.sync_queue.delete(row.id);
+    }
+  }
   await db.sync_queue.add({
     id: newId(),
     table,

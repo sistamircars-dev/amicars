@@ -1,9 +1,9 @@
-import { formatPair, galleryFor, loadContext, PLACEHOLDER, requestRestock, safeImg } from "./catalog.js";
+import { deleteProduct, formatPair, galleryFor, loadContext, PLACEHOLDER, requestRestock, safeImg } from "./catalog.js";
 import { db } from "./db.js";
 import { h } from "./dom.js";
 import { formatDisplayDate, lastArrivalByProduct } from "./movements.js?v=52";
 import { go } from "./nav.js";
-import { openProductForm } from "./productForm.js?v=37";
+import { openProductForm } from "./productForm.js?v=53";
 import { getTasa } from "./store.js";
 import { mountZoom } from "./zoom.js";
 
@@ -42,6 +42,7 @@ export async function openProduct(productId) {
   const attrs = Object.entries(product.atributos || {}).filter(([, value]) => String(value || "").trim());
   const close = h("button", { class: "btn ghost", type: "button" }, "Cerrar");
   const edit = h("button", { class: "btn", type: "button" }, "Editar ficha");
+  const remove = h("button", { class: "btn danger", type: "button" }, "Eliminar artículo");
   const salida = h("button", { class: "btn", type: "button" }, "Generar salida");
   const restock = sinStock
     ? h("button", { class: "btn", type: "button" }, product.solicitar_restock ? "Re-stock solicitado" : "Solicitar Re-stock")
@@ -63,7 +64,18 @@ export async function openProduct(productId) {
     back.remove();
     const saved = await openProductForm(product);
     if (saved) {
+      if (saved.is_active === false) {
+        go("inventario");
+        return;
+      }
       await openProduct(saved.id);
+    }
+  });
+  remove.addEventListener("click", async () => {
+    const deleted = await deleteProduct(product);
+    if (deleted) {
+      back.remove();
+      go("inventario");
     }
   });
   back.addEventListener("click", (event) => {
@@ -91,7 +103,7 @@ export async function openProduct(productId) {
         thumbs
       )
     ),
-    h("div", { class: "modal-actions" }, close, restock, salida, edit)
+    h("div", { class: "modal-actions" }, close, restock, salida, edit, remove)
   );
   back.append(box);
   document.body.append(back);

@@ -7,7 +7,7 @@ const LABELS = {
   unknown: "Iniciando…",
 };
 
-export function setSyncStatus(state, extra = "") {
+export function setSyncStatus(state, extra = "", hint = "") {
   const root = document.getElementById("sync-indicator");
   if (!root) {
     return;
@@ -24,6 +24,7 @@ export function setSyncStatus(state, extra = "") {
   if (label) {
     label.textContent = text;
   }
+  root.title = hint || (state === "retry" && extra ? extra : "");
   const icon = root.querySelector(".sync-icon");
   if (icon) {
     icon.textContent =

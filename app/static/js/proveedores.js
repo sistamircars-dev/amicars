@@ -10,7 +10,7 @@ import {
 } from "./movements.js?v=49";
 import { createDateField } from "./dateField.js?v=34";
 import { promptJustification } from "./promptJustification.js?v=49";
-import { openProductForm } from "./productForm.js?v=37";
+import { openProductForm } from "./productForm.js?v=53";
 import { deactivateLocal, hardDeleteLocal, saveLocal } from "./repository.js";
 
 function providerForm(existing) {

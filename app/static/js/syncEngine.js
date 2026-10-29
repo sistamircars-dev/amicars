@@ -1,6 +1,6 @@
 import { healthCheck, pullChanges, pushQueue, refreshSession, uploadMediaBlob } from "./api.js";
 import { flushCloudPurge } from "./archiveVault.js";
-import { db, ENTITY_TABLES, PUSH_ORDER, getMeta, pendingCount, setMeta } from "./db.js";
+import { db, ENTITY_TABLES, PUSH_ORDER, getMeta, nowIso, pendingCount, setMeta } from "./db.js";
 import { applyRemoteRevision } from "./pwa.js";
 import { enqueue, saveLocal } from "./repository.js";
 import { bindRetry, setSyncStatus } from "./syncStatus.js";
@@ -38,6 +38,64 @@ async function ensureSession() {
   return Boolean(session && session.ok);
 }
 
+const ID_REFS = {
+  categorias: [
+    ["subcategorias", "categoria_id"],
+    ["productos", "categoria_id"],
+  ],
+  subcategorias: [
+    ["campos_personalizados", "subcategoria_id"],
+    ["productos", "subcategoria_id"],
+  ],
+  proveedores: [
+    ["productos", "proveedor_id"],
+    ["producto_proveedores", "proveedor_id"],
+    ["movimientos_inventario", "proveedor_id"],
+  ],
+  productos: [
+    ["producto_proveedores", "producto_id"],
+    ["producto_imagenes", "producto_id"],
+    ["historico_ref", "producto_id"],
+    ["solicitudes_restock", "producto_id"],
+    ["movimientos_inventario", "producto_id"],
+  ],
+};
+
+const FK_COLUMNS = ["categoria_id", "subcategoria_id", "proveedor_id", "producto_id"];
+
+async function rewriteRefs(table, fromId, toId) {
+  const refs = ID_REFS[table] || [];
+  for (const [other, column] of refs) {
+    const rows = await db.table(other).filter((row) => row[column] === fromId).toArray();
+    for (const row of rows) {
+      const next = { ...row, [column]: toId, updated_at: nowIso() };
+      await db.table(other).put(next);
+      if (other !== "movimientos_inventario") {
+        await enqueue(other, "update", next);
+      }
+    }
+  }
+  const queued = await db.sync_queue.toArray();
+  for (const item of queued) {
+    const payload = item.payload || {};
+    let changed = false;
+    const next = { ...payload };
+    if (item.table === table && item.entity_id === fromId) {
+      await db.sync_queue.delete(item.id);
+      continue;
+    }
+    for (const column of FK_COLUMNS) {
+      if (next[column] === fromId) {
+        next[column] = toId;
+        changed = true;
+      }
+    }
+    if (changed) {
+      await db.sync_queue.update(item.id, { payload: next });
+    }
+  }
+}
+
 async function applyRemaps(remaps) {
   for (const remap of remaps || []) {
     if (!remap || !remap.table || !remap.from || !remap.to || remap.from === remap.to) {
@@ -46,18 +104,17 @@ async function applyRemaps(remaps) {
     if (!ENTITY_TABLES.includes(remap.table)) {
       continue;
     }
+    await rewriteRefs(remap.table, remap.from, remap.to);
     const table = db.table(remap.table);
     const local = await table.get(remap.from);
     const remote = await table.get(remap.to);
     if (local && !remote) {
       await table.put({ ...local, id: remap.to });
+    } else if (local && remote) {
+      await table.put({ ...remote, ...local, id: remap.to });
     }
     if (local) {
       await table.delete(remap.from);
-    }
-    const queued = await db.sync_queue.where("entity_id").equals(remap.from).toArray();
-    for (const row of queued) {
-      await db.sync_queue.delete(row.id);
     }
   }
 }
@@ -133,43 +190,141 @@ function rank(table) {
   return index < 0 ? 99 : index;
 }
 
-async function flushQueue() {
-  const all = await db.sync_queue.orderBy("created_at").toArray();
-  all.sort((a, b) => rank(a.table) - rank(b.table));
-  for (let offset = 0; offset < all.length; offset += BATCH) {
-    const slice = all.slice(offset, offset + BATCH);
-    const items = slice.map((row) => ({
-      id: row.entity_id,
-      table: row.table,
-      op: row.op,
-      payload: row.payload,
-      updated_at: row.updated_at,
-    }));
-    const result = await pushQueue(items);
-    if (!result.ok || !result.data) {
-      throw new Error((result.data && result.data.error) || `Push HTTP ${result.status}`);
+async function latestQueue() {
+  const all = await db.sync_queue.toArray();
+  const best = new Map();
+  for (const row of all) {
+    const key = `${row.table}:${row.entity_id}`;
+    const prev = best.get(key);
+    if (!prev || String(row.updated_at || row.created_at || "") >= String(prev.updated_at || prev.created_at || "")) {
+      best.set(key, row);
     }
-    await applyRemaps(result.data.remaps || []);
-    const done = new Set([...(result.data.accepted || []), ...(result.data.duplicates || [])]);
-    const rejected = new Map((result.data.rejected || []).map((row) => [row.id, row.error]));
-    for (const row of slice) {
-      if (done.has(row.entity_id)) {
-        await db.sync_queue.delete(row.id);
-      } else if (rejected.has(row.entity_id)) {
-        const err = String(rejected.get(row.entity_id) || "");
-        if (/23505|duplicate|unique/i.test(err) && row.table === "tasas_bcv") {
+  }
+  const keep = new Set([...best.values()].map((row) => row.id));
+  for (const row of all) {
+    if (!keep.has(row.id)) {
+      await db.sync_queue.delete(row.id);
+    }
+  }
+  return [...best.values()].sort((a, b) => rank(a.table) - rank(b.table) || String(a.created_at || "").localeCompare(String(b.created_at || "")));
+}
+
+function isFkError(err) {
+  return /23503|foreign key/i.test(err || "");
+}
+
+async function softenPayload(row, err) {
+  if (!isFkError(err)) {
+    return false;
+  }
+  const payload = { ...(row.payload || {}) };
+  const optional = {
+    productos: ["proveedor_id", "categoria_id", "subcategoria_id"],
+    movimientos_inventario: ["proveedor_id"],
+  };
+  const cols = optional[row.table] || [];
+  let changed = false;
+  for (const col of cols) {
+    if (payload[col] && (err.includes(col) || err.includes(`${row.table}_${col}`))) {
+      if (col === "proveedor_id" && payload.proveedor_id) {
+        const parent = await db.proveedores.get(payload.proveedor_id);
+        if (parent) {
+          await enqueue("proveedores", "update", parent);
+          return true;
+        }
+      }
+      if (col === "categoria_id" && payload.categoria_id) {
+        const parent = await db.categorias.get(payload.categoria_id);
+        if (parent) {
+          await enqueue("categorias", "update", parent);
+          return true;
+        }
+      }
+      if (col === "subcategoria_id" && payload.subcategoria_id) {
+        const parent = await db.subcategorias.get(payload.subcategoria_id);
+        if (parent) {
+          await enqueue("subcategorias", "update", parent);
+          return true;
+        }
+      }
+      payload[col] = null;
+      changed = true;
+    }
+  }
+  if (!changed && row.table === "productos" && payload.proveedor_id) {
+    const parent = await db.proveedores.get(payload.proveedor_id);
+    if (parent) {
+      await enqueue("proveedores", "update", parent);
+      return true;
+    }
+    payload.proveedor_id = null;
+    changed = true;
+  }
+  if (!changed) {
+    return false;
+  }
+  payload.updated_at = nowIso();
+  const local = await db.table(row.table).get(row.entity_id);
+  if (local) {
+    await db.table(row.table).put({ ...local, ...payload });
+  }
+  await db.sync_queue.update(row.id, { payload, updated_at: payload.updated_at, last_error: err });
+  return true;
+}
+
+async function flushQueue() {
+  for (let round = 0; round < 8; round += 1) {
+    const all = await latestQueue();
+    if (!all.length) {
+      return;
+    }
+    let progressed = false;
+    for (let offset = 0; offset < all.length; offset += BATCH) {
+      const slice = all.slice(offset, offset + BATCH);
+      const items = slice.map((row) => {
+        const updated = (row.payload && row.payload.updated_at) || row.updated_at || nowIso();
+        return {
+          id: row.entity_id,
+          table: row.table,
+          op: row.op,
+          payload: { ...(row.payload || {}), id: row.entity_id, updated_at: updated },
+          updated_at: updated,
+        };
+      });
+      const result = await pushQueue(items);
+      if (result.status === 401) {
+        throw new Error("Sesión expirada; vuelva a entrar.");
+      }
+      if (!result.data || result.status >= 500) {
+        throw new Error((result.data && result.data.error) || `Push HTTP ${result.status}`);
+      }
+      await applyRemaps(result.data.remaps || []);
+      const done = new Set([...(result.data.accepted || []), ...(result.data.duplicates || [])]);
+      const rejected = new Map((result.data.rejected || []).map((row) => [row.id, row.error]));
+      for (const row of slice) {
+        if (done.has(row.entity_id)) {
           await db.sync_queue.delete(row.id);
+          progressed = true;
+          continue;
+        }
+        const err = String(rejected.get(row.entity_id) || result.data.error || "");
+        if (/23505|duplicate|unique/i.test(err) && (row.table === "tasas_bcv" || row.table === "preferencias_usuario" || row.table === "configuracion_sistema")) {
+          await db.sync_queue.delete(row.id);
+          progressed = true;
+          continue;
+        }
+        if (await softenPayload(row, err)) {
+          progressed = true;
           continue;
         }
         await db.sync_queue.update(row.id, {
           attempts: (row.attempts || 0) + 1,
-          last_error: err,
+          last_error: err || "Rechazado",
         });
       }
     }
-    if ((result.data.rejected || []).length && done.size === 0) {
-      const detail = (result.data.rejected[0] && result.data.rejected[0].error) || "";
-      throw new Error(detail || "El servidor rechazó el lote de sincronización");
+    if (!progressed) {
+      return;
     }
   }
 }
@@ -200,6 +355,9 @@ async function mergePull(tables) {
 async function pullRemote(full = false) {
   const since = full ? null : await getMeta("last_pull_at", null);
   const result = await pullChanges(since);
+  if (result.status === 401) {
+    throw new Error("Sesión expirada; vuelva a entrar.");
+  }
   if (!result.ok || !result.data || !result.data.ok) {
     throw new Error((result.data && result.data.error) || `Pull HTTP ${result.status}`);
   }
@@ -208,6 +366,18 @@ async function pullRemote(full = false) {
   if (result.data.server_time) {
     await setMeta("last_pull_at", result.data.server_time);
   }
+}
+
+async function statusFromCounts(counts, hint = "") {
+  if (!isOnline()) {
+    setSyncStatus("offline", counts.total > 0 ? String(counts.total) : "", hint);
+    return;
+  }
+  if (counts.total > 0) {
+    setSyncStatus("pending", String(counts.total), hint);
+    return;
+  }
+  setSyncStatus("connected");
 }
 
 export async function runSync(force = false) {
@@ -230,22 +400,32 @@ export async function runSync(force = false) {
       throw new Error("Sesión expirada; vuelva a entrar.");
     }
     await flushQueue();
-    await pullRemote(force);
+    try {
+      await pullRemote(force);
+    } catch (err) {
+      if (/sesión|401|autentic/i.test(String(err && err.message))) {
+        throw err;
+      }
+    }
     await flushMedia();
     await flushCloudPurge();
     await applyRemoteRevision();
     const leftover = await pendingCount();
-    if (leftover.total > 0) {
-      setSyncStatus("pending", String(leftover.total));
-    } else {
-      setSyncStatus("connected");
-    }
-  } catch (_err) {
+    const stuck = leftover.ops
+      ? await db.sync_queue.orderBy("created_at").first()
+      : leftover.media
+        ? await db.offline_media_queue.orderBy("created_at").first()
+        : null;
+    await statusFromCounts(leftover, stuck && stuck.last_error ? String(stuck.last_error).slice(0, 180) : "");
+  } catch (err) {
     const counts = await pendingCount();
+    const detail = String(err && err.message ? err.message : err);
     if (!isOnline()) {
       setSyncStatus("offline", counts.total > 0 ? String(counts.total) : "");
+    } else if (/sesión|401|autentic|heartbeat|HTTP|network|Failed to fetch/i.test(detail)) {
+      setSyncStatus("retry", "", detail);
     } else if (counts.total > 0) {
-      setSyncStatus("retry");
+      setSyncStatus("pending", String(counts.total), detail);
     } else {
       setSyncStatus("connected");
     }

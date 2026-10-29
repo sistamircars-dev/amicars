@@ -1,4 +1,4 @@
-import { createProduct, galleryFor, loadContext, removeProductImage, safeImg, updateProduct } from "./catalog.js";
+import { createProduct, deleteProduct, galleryFor, loadContext, removeProductImage, safeImg, updateProduct } from "./catalog.js";
 import { h } from "./dom.js";
 import { promptCategoria, promptSubcategoria } from "./taxonomy.js?v=37";
 
@@ -191,7 +191,33 @@ export function openProductForm(existing = null) {
 
     const save = h("button", { class: "btn", type: "button" }, existing ? "Guardar ficha" : "Crear producto");
     const cancel = h("button", { class: "btn ghost", type: "button" }, "Cancelar");
+    const remove = existing ? h("button", { class: "btn danger", type: "button" }, "Eliminar artículo") : null;
     cancel.addEventListener("click", () => close(null));
+    if (remove) {
+      remove.addEventListener("click", async () => {
+        if (saving) {
+          return;
+        }
+        saving = true;
+        remove.disabled = true;
+        save.disabled = true;
+        try {
+          const deleted = await deleteProduct(existing);
+          if (!deleted) {
+            saving = false;
+            remove.disabled = false;
+            save.disabled = false;
+            return;
+          }
+          close(deleted);
+        } catch (err) {
+          status.textContent = err.message || "No se pudo eliminar el artículo.";
+          saving = false;
+          remove.disabled = false;
+          save.disabled = false;
+        }
+      });
+    }
     save.addEventListener("click", async () => {
       if (saving) {
         return;
@@ -259,7 +285,7 @@ export function openProductForm(existing = null) {
       fieldHost
     );
 
-    box.append(h("h3", {}, existing ? "Editar ficha" : "Nuevo producto"), grid, status, h("div", { class: "modal-actions" }, cancel, save));
+    box.append(h("h3", {}, existing ? "Editar ficha" : "Nuevo producto"), grid, status, h("div", { class: "modal-actions" }, cancel, remove, save));
     back.append(box);
     document.body.append(back);
     descripcion.focus();

@@ -1,5 +1,6 @@
 import { uploadMediaBlob } from "./api.js";
 import { db, newId, nowIso } from "./db.js";
+import { promptJustification } from "./promptJustification.js";
 import { queueOfflineImage, saveLocal } from "./repository.js";
 import { getTasa } from "./store.js";
 
@@ -373,6 +374,52 @@ export async function updateProduct(existing, input, files = []) {
   }
   const notes = await attachPhotos(next.id, files);
   return { product: next, notes, created: false };
+}
+
+export async function deleteProduct(product) {
+  if (!product || !product.id) {
+    return null;
+  }
+  const reason = await promptJustification(
+    "Eliminar artículo",
+    "Indique por qué se elimina este artículo. El historial de entradas y salidas se conserva."
+  );
+  if (!reason) {
+    return null;
+  }
+  const current = (await db.productos.get(product.id)) || product;
+  const images = await db.producto_imagenes.where("producto_id").equals(current.id).toArray();
+  for (const image of images) {
+    if (image.is_active !== false) {
+      await saveLocal("producto_imagenes", { ...image, is_active: false, is_cover: false });
+    }
+  }
+  const queued = await db.offline_media_queue.where("producto_id").equals(current.id).toArray();
+  for (const item of queued) {
+    await db.offline_media_queue.delete(item.id);
+  }
+  const links = await db.producto_proveedores.where("producto_id").equals(current.id).toArray();
+  for (const link of links) {
+    if (link.is_active !== false) {
+      await saveLocal("producto_proveedores", { ...link, is_active: false });
+    }
+  }
+  const solicitudes = await db.solicitudes_restock.where("producto_id").equals(current.id).toArray();
+  for (const row of solicitudes) {
+    if (row.is_active !== false) {
+      await saveLocal("solicitudes_restock", {
+        ...row,
+        is_active: false,
+        estado: row.estado === "pendiente" ? "cancelada" : row.estado,
+        notas: [row.notas, `Eliminado: ${reason}`].filter(Boolean).join(" · "),
+      });
+    }
+  }
+  return saveLocal("productos", {
+    ...current,
+    is_active: false,
+    solicitar_restock: false,
+  });
 }
 
 export async function findByCodigo(codigo, subcategoriaId) {

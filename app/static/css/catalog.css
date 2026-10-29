@@ -218,6 +218,11 @@
   vertical-align: top;
 }
 
+.data-table td .btn + .btn,
+.mosaic-meta .btn + .btn {
+  margin-left: 0.35rem;
+}
+
 .data-table tr.stock-zero td {
   color: #d5dbe3;
   background: rgba(213, 219, 227, 0.1);

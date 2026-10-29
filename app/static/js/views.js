@@ -2,9 +2,9 @@ import { renderBitacora } from "./bitacora.js";
 import { renderConfig } from "./bcvView.js?v=52";
 import { renderEntradas } from "./entradas.js?v=52";
 import { renderFallas } from "./fallas.js?v=40";
-import { renderInventory } from "./inventory.js?v=52";
+import { renderInventory } from "./inventory.js?v=53";
 import { renderPedidos } from "./pedidos.js?v=40";
-import { renderProveedores } from "./proveedores.js?v=52";
+import { renderProveedores } from "./proveedores.js?v=53";
 import { renderSalidas } from "./salidas.js?v=49";
 import { renderTaxonomy } from "./taxonomy.js?v=37";
 

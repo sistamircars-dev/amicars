@@ -1,12 +1,12 @@
-import { coverFor, formatPair, loadContext, matchesFieldFilters, matchesQuery, productBlob, safeImg } from "./catalog.js?v=40";
+import { coverFor, deleteProduct, formatPair, loadContext, matchesFieldFilters, matchesQuery, productBlob, safeImg } from "./catalog.js?v=53";
 import { db } from "./db.js";
 import { downloadTablePdf, downloadXlsx } from "./exportDocs.js?v=40";
 import { h } from "./dom.js";
 import { formatDisplayDate, lastArrivalByProduct, todayLocal } from "./movements.js?v=52";
 import { mountFieldFilters } from "./filters.js";
 import { getRouteParams } from "./nav.js";
-import { openProduct } from "./productDetail.js?v=37";
-import { openProductForm } from "./productForm.js?v=37";
+import { openProduct } from "./productDetail.js?v=53";
+import { openProductForm } from "./productForm.js?v=53";
 import { mountSearch } from "./searchBox.js";
 import { getPrefs, savePrefs } from "./store.js";
 
@@ -165,15 +165,20 @@ export async function renderInventory(root) {
     const body = products.map((product) => {
       const empty = Number(product.stock || 0) <= 0;
       const edit = h("button", { class: "btn small ghost", type: "button" }, "Editar");
+      const remove = h("button", { class: "btn small danger", type: "button" }, "Eliminar");
       edit.addEventListener("click", async (event) => {
         event.stopPropagation();
         if (await openProductForm(product)) refresh();
+      });
+      remove.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        if (await deleteProduct(product)) refresh();
       });
       const row = h(
         "tr",
         { class: empty ? "stock-zero" : "" },
         ...visible.map((column) => h("td", {}, textOf(product, column.id, view))),
-        h("td", {}, edit)
+        h("td", {}, edit, remove)
       );
       row.addEventListener("click", () => openProduct(product.id));
       return row;
@@ -190,15 +195,20 @@ export async function renderInventory(root) {
         const img = safeImg(cover.src, product.descripcion, "mosaic-photo");
         const lines = mosaic.map((id) => textOf(product, id, view)).filter(Boolean);
         const edit = h("button", { class: "btn small ghost", type: "button" }, "Editar");
+        const remove = h("button", { class: "btn small danger", type: "button" }, "Eliminar");
         edit.addEventListener("click", async (event) => {
           event.stopPropagation();
           if (await openProductForm(product)) refresh();
+        });
+        remove.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          if (await deleteProduct(product)) refresh();
         });
         const card = h(
           "article",
           { class: Number(product.stock || 0) <= 0 ? "glass mosaic-card stock-zero" : "glass mosaic-card" },
           img,
-          h("div", { class: "mosaic-meta" }, ...lines.map((line) => h("p", {}, line)), edit)
+          h("div", { class: "mosaic-meta" }, ...lines.map((line) => h("p", {}, line)), edit, remove)
         );
         card.addEventListener("click", () => openProduct(product.id));
         return card;
