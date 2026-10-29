@@ -2,7 +2,7 @@ import { coverFor, formatPair, loadContext, matchesFieldFilters, matchesQuery, p
 import { db } from "./db.js";
 import { downloadTablePdf, downloadXlsx } from "./exportDocs.js?v=40";
 import { h } from "./dom.js";
-import { formatDisplayDate, todayLocal } from "./movements.js?v=36";
+import { formatDisplayDate, lastArrivalByProduct, todayLocal } from "./movements.js?v=52";
 import { mountFieldFilters } from "./filters.js";
 import { getRouteParams } from "./nav.js";
 import { openProduct } from "./productDetail.js?v=37";
@@ -16,6 +16,7 @@ const COLUMNS = [
   { id: "categoria", label: "Categoría" },
   { id: "proveedor", label: "Proveedor" },
   { id: "stock", label: "Stock" },
+  { id: "llegada", label: "Llegada" },
   { id: "costo", label: "Costo (REF/Bs)" },
   { id: "venta", label: "Precio de venta (REF/Bs)" },
 ];
@@ -29,6 +30,7 @@ function textOf(product, id, ctx) {
   if (id === "categoria") return ctx.categorias.get(product.categoria_id)?.nombre || "";
   if (id === "proveedor") return proveedor ? proveedor.razon_social : "";
   if (id === "stock") return String(product.stock ?? 0);
+  if (id === "llegada") return ctx.arrivals?.get(product.id) ? formatDisplayDate(ctx.arrivals.get(product.id)) : "—";
   if (id === "costo") return formatPair(product.ref_entrada, ctx.tasa);
   if (id === "venta") return formatPair(product.ref_venta, ctx.tasa);
   if (id.startsWith("attr:")) {
@@ -103,6 +105,7 @@ export async function renderInventory(root) {
     { id: "categoria", label: "Categoría" },
     { id: "proveedor", label: "Proveedor" },
     { id: "stock", label: "Stock" },
+    { id: "llegada", label: "Llegada" },
     { id: "costo", label: "Costo" },
     { id: "venta", label: "Venta" },
     ...extraColumns,
@@ -221,6 +224,7 @@ export async function renderInventory(root) {
   async function refresh() {
     const current = ++ticket;
     const view = await loadContext();
+    view.arrivals = lastArrivalByProduct(await db.movimientos_inventario.toArray());
     if (current !== ticket) {
       return;
     }

@@ -320,7 +320,36 @@ export function formatRate(value) {
 }
 
 export async function tasaFor(fecha) {
-  return (await getTasa(fecha)) || (await getTasa());
+  const wanted = String(fecha || "").slice(0, 10);
+  if (wanted) {
+    const exact = await getTasa(wanted);
+    if (exact) {
+      return exact;
+    }
+  }
+  return getTasa();
+}
+
+export function lastArrivalByProduct(moves) {
+  const map = new Map();
+  for (const move of moves || []) {
+    if (move.tipo !== "entrada") {
+      continue;
+    }
+    const payload = movePayload(move);
+    if (payload.origen === "anulacion" || payload.anulado) {
+      continue;
+    }
+    const fecha = String(payload.fecha_llegada || move.fecha || "").slice(0, 10);
+    if (!fecha || !move.producto_id) {
+      continue;
+    }
+    const prev = map.get(move.producto_id);
+    if (!prev || fecha > prev) {
+      map.set(move.producto_id, fecha);
+    }
+  }
+  return map;
 }
 
 async function clearRestockIfRecovered(product) {

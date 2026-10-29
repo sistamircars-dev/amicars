@@ -45,8 +45,9 @@ export function createDateField({ value = "", ariaLabel = "Fecha" } = {}) {
   visible.addEventListener("input", () => {
     visible.value = maskDate(visible.value);
     const iso = parseDisplayDate(visible.value);
-    if (iso) {
+    if (iso && picker.value !== iso) {
       picker.value = iso;
+      wrap.dispatchEvent(new Event("change", { bubbles: true }));
     }
   });
   visible.addEventListener("change", (event) => {

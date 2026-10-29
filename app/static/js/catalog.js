@@ -614,3 +614,19 @@ export async function requestRestock(product, note = "Solicitud desde el buscado
     });
   }
 }
+
+export async function raiseSalePrices(percent) {
+  const factor = 1 + Number(percent) / 100;
+  if (!Number.isFinite(factor) || factor <= 0) {
+    throw new Error("Indique un porcentaje válido.");
+  }
+  const products = (await db.productos.toArray()).filter((row) => row.is_active !== false);
+  let count = 0;
+  for (const product of products) {
+    const nextSale = Math.round(num(product.ref_venta) * factor * 10000) / 10000;
+    await saveLocal("productos", { ...product, ref_venta: nextSale });
+    await writeHistorico(product.id, product.ref_entrada, nextSale, null);
+    count += 1;
+  }
+  return count;
+}

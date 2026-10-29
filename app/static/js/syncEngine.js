@@ -109,9 +109,6 @@ async function flushMedia() {
         attempts: (item.attempts || 0) + 1,
         last_error: (result.data && result.data.error) || `HTTP ${result.status}`,
       });
-      if (result.status === 0 || result.status >= 500 || result.status === 503) {
-        throw new Error(item.last_error || "Fallo subiendo imagen");
-      }
       continue;
     }
     const imageRow = {
@@ -200,8 +197,8 @@ async function mergePull(tables) {
   }
 }
 
-async function pullRemote() {
-  const since = await getMeta("last_pull_at", null);
+async function pullRemote(full = false) {
+  const since = full ? null : await getMeta("last_pull_at", null);
   const result = await pullChanges(since);
   if (!result.ok || !result.data || !result.data.ok) {
     throw new Error((result.data && result.data.error) || `Pull HTTP ${result.status}`);
@@ -232,9 +229,9 @@ export async function runSync(force = false) {
     if (!sessionOk) {
       throw new Error("Sesión expirada; vuelva a entrar.");
     }
-    await flushMedia();
     await flushQueue();
-    await pullRemote();
+    await pullRemote(force);
+    await flushMedia();
     await flushCloudPurge();
     await applyRemoteRevision();
     const leftover = await pendingCount();

@@ -29,8 +29,14 @@ function providerForm(existing) {
   return { codigo, razon, contacto, telefono, email, notas };
 }
 
-function supplierBlob(row) {
-  return [row.codigo_proveedor, row.razon_social, row.contacto, row.telefono, row.email, row.notas]
+function supplierBlob(row, productos = [], links = []) {
+  const ids = new Set();
+  productos.filter((product) => product.proveedor_id === row.id).forEach((product) => ids.add(product.id));
+  links.filter((link) => link.proveedor_id === row.id && link.is_active !== false).forEach((link) => ids.add(link.producto_id));
+  const extras = productos
+    .filter((product) => ids.has(product.id))
+    .map((product) => `${product.codigo || ""} ${product.descripcion || ""}`);
+  return [row.codigo_proveedor, row.razon_social, row.contacto, row.telefono, row.email, row.notas, ...extras]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -64,7 +70,7 @@ export async function renderProveedores(root) {
   const searchInput = h("input", {
     class: "app-input",
     type: "search",
-    placeholder: "Buscar proveedor, código, contacto…",
+    placeholder: "Buscar proveedor, producto, código o descripción…",
     autocomplete: "off",
     "aria-label": "Buscar proveedores",
   });
@@ -170,11 +176,67 @@ export async function renderProveedores(root) {
     numero.focus();
   }
 
-  function facturasTab(row, moves, allMoves) {
+  function facturasTab(row, moves, allMoves, productos) {
     const groups = groupEntradaFacturas(moves, row.id, allMoves);
     if (!groups.length) {
       return h("p", { class: "muted" }, "No hay facturas de entrada registradas para este proveedor.");
     }
+    const nodes = [];
+    groups.forEach((group) => {
+      const totalRef = group.lineas.reduce((sum, line) => sum + Number(line.monto_ref || 0), 0);
+      const edit = h("button", { class: "btn small ghost", type: "button" }, "Editar");
+      edit.addEventListener("click", (event) => {
+        event.stopPropagation();
+        openEditFactura(group);
+      });
+      const cancel = h("button", { class: "btn small danger", type: "button" }, "Anular");
+      cancel.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        const just = await promptJustification(`Anular factura ${group.numero_factura || ""}`.trim());
+        if (!just) {
+          return;
+        }
+        try {
+          await voidEntradaFactura(group.key, just);
+          status.textContent = "Factura anulada.";
+          refresh();
+        } catch (err) {
+          status.textContent = err.message || "No se pudo anular.";
+        }
+      });
+      nodes.push(
+        h(
+          "tr",
+          {},
+          h("td", {}, group.numero_factura || "—"),
+          h("td", {}, formatDisplayDate(group.fecha_llegada)),
+          h("td", {}, formatDisplayDate(group.fecha)),
+          h("td", {}, String(group.lineas.length)),
+          h("td", {}, totalRef.toFixed(2)),
+          h("td", {}, edit, cancel)
+        )
+      );
+      nodes.push(
+        h(
+          "tr",
+          { class: "invoice-items-row" },
+          h(
+            "td",
+            { colspan: "6" },
+            h(
+              "ul",
+              { class: "invoice-item-list" },
+              ...group.lineas.map((line) => {
+                const product = productos.find((item) => item.id === line.producto_id);
+                const code = product?.codigo || "";
+                const name = line.descripcion || product?.descripcion || "Ítem";
+                return h("li", {}, `${code ? `${code} · ` : ""}${name} · cant. ${line.cantidad} · ${Number(line.ref_unitario || 0).toFixed(2)} REF`);
+              })
+            )
+          )
+        )
+      );
+    });
     return h(
       "div",
       { class: "table-wrap" },
@@ -182,43 +244,7 @@ export async function renderProveedores(root) {
         "table",
         { class: "data-table" },
         h("thead", {}, h("tr", {}, h("th", {}, "Factura"), h("th", {}, "Llegada"), h("th", {}, "Fecha registro"), h("th", {}, "Ítems"), h("th", {}, "REF"), h("th", {}, ""))),
-        h(
-          "tbody",
-          {},
-          ...groups.map((group) => {
-            const totalRef = group.lineas.reduce((sum, line) => sum + Number(line.monto_ref || 0), 0);
-            const edit = h("button", { class: "btn small ghost", type: "button" }, "Editar");
-            edit.addEventListener("click", (event) => {
-              event.stopPropagation();
-              openEditFactura(group);
-            });
-            const cancel = h("button", { class: "btn small danger", type: "button" }, "Anular");
-            cancel.addEventListener("click", async (event) => {
-              event.stopPropagation();
-              const just = await promptJustification(`Anular factura ${group.numero_factura || ""}`.trim());
-              if (!just) {
-                return;
-              }
-              try {
-                await voidEntradaFactura(group.key, just);
-                status.textContent = "Factura anulada.";
-                refresh();
-              } catch (err) {
-                status.textContent = err.message || "No se pudo anular.";
-              }
-            });
-            return h(
-              "tr",
-              {},
-              h("td", {}, group.numero_factura || "—"),
-              h("td", {}, formatDisplayDate(group.fecha_llegada)),
-              h("td", {}, formatDisplayDate(group.fecha)),
-              h("td", {}, String(group.lineas.length)),
-              h("td", {}, totalRef.toFixed(2)),
-              h("td", {}, edit, cancel)
-            );
-          })
-        )
+        h("tbody", {}, ...nodes)
       )
     );
   }
@@ -363,7 +389,7 @@ export async function renderProveedores(root) {
       "div",
       { class: "supplier-detail" },
       h("div", { class: "supplier-detail-head" }, h("div", { class: "supplier-tabs" }, tabProductos, tabFacturas), supplierDetailTab === "productos" ? saveMins : null),
-      supplierDetailTab === "facturas" ? facturasTab(row, moves, allMoves) : productosPanel
+      supplierDetailTab === "facturas" ? facturasTab(row, moves, allMoves, productos) : productosPanel
     );
   }
 
@@ -435,13 +461,22 @@ export async function renderProveedores(root) {
       return;
     }
     paintChips(proveedores);
-    const visible = proveedores.filter((row) => matchesQuery(supplierBlob(row), query));
+    const visible = proveedores.filter((row) => matchesQuery(supplierBlob(row, productos, links), query));
     const rows = [];
     visible.forEach((row) => {
       const count = linkedSet(row, productos, links).size;
-      const edit = h("button", { class: "btn small ghost", type: "button" }, "Editar");
+      const edit = h("button", { class: "btn small ghost", type: "button" }, "Editar datos");
+      const mins = h("button", { class: "btn small ghost", type: "button" }, "Mínimos");
       const remove = h("button", { class: "btn small danger", type: "button" }, "Eliminar");
       edit.addEventListener("click", (event) => {
+        event.stopPropagation();
+        editing = row;
+        formOpen = true;
+        expandedId = row.id;
+        paintForm();
+        formHost.querySelector("input")?.focus();
+      });
+      mins.addEventListener("click", (event) => {
         event.stopPropagation();
         expandedId = row.id;
         minsEditingId = minsEditingId === row.id ? null : row.id;
@@ -477,7 +512,7 @@ export async function renderProveedores(root) {
         h("td", {}, row.is_active === false ? `${row.razon_social} (inactivo)` : row.razon_social),
         h("td", {}, [row.contacto, row.telefono, row.email].filter(Boolean).join(" · ")),
         h("td", {}, String(count)),
-        h("td", {}, edit, remove)
+        h("td", {}, edit, mins, remove)
       );
       tr.addEventListener("click", (event) => {
         if (event.target.closest("button, a, input, select, textarea")) {

@@ -1,5 +1,7 @@
 import { formatPair, galleryFor, loadContext, PLACEHOLDER, requestRestock, safeImg } from "./catalog.js";
+import { db } from "./db.js";
 import { h } from "./dom.js";
+import { formatDisplayDate, lastArrivalByProduct } from "./movements.js?v=52";
 import { go } from "./nav.js";
 import { openProductForm } from "./productForm.js?v=37";
 import { getTasa } from "./store.js";
@@ -12,6 +14,8 @@ export async function openProduct(productId) {
     return;
   }
   const tasa = ctx.tasa || (await getTasa());
+  const arrivals = lastArrivalByProduct(await db.movimientos_inventario.toArray());
+  const llegada = arrivals.get(product.id);
   const photos = galleryFor(product.id, ctx);
   const cover = photos[0] || { src: PLACEHOLDER, full: PLACEHOLDER, empty: true };
   const proveedor = ctx.proveedores.get(product.proveedor_id);
@@ -79,6 +83,7 @@ export async function openProduct(productId) {
         sinStock ? h("p", { class: "sin-stock-tag" }, "Sin stock") : null,
         h("p", {}, product.codigo || "Sin código"),
         h("p", {}, `Stock: ${product.stock}`),
+        h("p", {}, `Llegada: ${llegada ? formatDisplayDate(llegada) : "—"}`),
         h("p", {}, `Costo: ${formatPair(product.ref_entrada, tasa)}`),
         h("p", {}, `Venta: ${formatPair(product.ref_venta, tasa)}`),
         h("p", {}, proveedor ? `Proveedor: ${proveedor.razon_social}` : "Sin proveedor"),

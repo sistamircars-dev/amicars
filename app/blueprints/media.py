@@ -41,9 +41,17 @@ def upload():
         stored = upload_image_bytes(raw, public_id=public_id)
     except Exception as exc:
         current_app.logger.exception("Cloudinary upload failed")
-        detail = str(exc)
-        if "api_key" in detail.lower() or "invalid signature" in detail.lower() or "unknown" in detail.lower():
-            return jsonify({"ok": False, "error": "Cloudinary rechazó la clave. Revise API key, secret y cloud name."}), 502
-        return jsonify({"ok": False, "error": "No se pudo subir la imagen a Cloudinary"}), 502
+        detail = re.sub(r"\s+", " ", str(exc)).strip()[:180]
+        return jsonify(
+            {
+                "ok": False,
+                "error": (
+                    "Cloudinary no aceptó la subida. En Render use CLOUDINARY_URL "
+                    "(cloudinary://API_KEY:API_SECRET@CLOUD_NAME) o las tres variables "
+                    "CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY y CLOUDINARY_API_SECRET."
+                    + (f" Detalle: {detail}" if detail else "")
+                ),
+            }
+        ), 502
 
     return jsonify({"ok": True, **stored}), 200

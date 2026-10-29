@@ -269,6 +269,13 @@ tr.move-voided td {
   margin-top: 1rem;
 }
 
+.invoice-item-list {
+  margin: 0.2rem 0 0.6rem 1.1rem;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.86rem;
+}
+
 .supplier-detail-head h3 {
   margin: 0;
 }

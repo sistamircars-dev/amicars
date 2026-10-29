@@ -1,11 +1,12 @@
 import { fetchBcvDate, fetchBcvToday } from "./api.js";
-import { archiveStatus, restoreHistoryFromFile, runArchiveIfNeeded } from "./archiveVault.js?v=51";
+import { raiseSalePrices } from "./catalog.js";
+import { archiveStatus, restoreHistoryFromFile, runArchiveIfNeeded } from "./archiveVault.js?v=52";
 import { createDateField } from "./dateField.js?v=34";
-import { pickArchiveDir } from "./diskStore.js?v=51";
+import { pickArchiveDir } from "./diskStore.js?v=52";
 import { h } from "./dom.js";
 import { countBackupRows, downloadBackup, exportLocalBackup, restoreLocalBackup } from "./localBackup.js";
 import { formatDisplayDate, formatRate } from "./movements.js";
-import { downloadClientScript, runInstallSetup } from "./pwa.js?v=51";
+import { downloadClientScript, runInstallSetup } from "./pwa.js?v=52";
 import { getConfig, getTasa, setConfig, upsertTasa } from "./store.js";
 import { runSync } from "./syncEngine.js";
 
@@ -33,6 +34,29 @@ export async function syncTodayRate() {
   } catch (_err) {
     /* La barra conserva la última tasa guardada. */
   }
+}
+
+export async function ensureRateForDate(fecha) {
+  const wanted = String(fecha || "").slice(0, 10);
+  if (!wanted) {
+    return getTasa();
+  }
+  const local = await getTasa(wanted);
+  if (local) {
+    return local;
+  }
+  try {
+    const today = new Date();
+    const isoToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const result = wanted === isoToday ? await fetchBcvToday() : await fetchBcvDate(wanted);
+    if (result.ok && result.data && result.data.ok) {
+      await upsertTasa(result.data);
+      await refreshRateChip();
+    }
+  } catch (_err) {
+    /* Se usa la tasa local más cercana. */
+  }
+  return (await getTasa(wanted)) || (await getTasa());
 }
 
 async function applyRemote(result, statusNode) {
@@ -85,6 +109,37 @@ export async function renderConfig(root) {
     const cantidad = Number(stockInput.value || 0);
     await setConfig("stock_minimo_global", { cantidad });
     status.textContent = `Stock mínimo global: ${cantidad}.`;
+  });
+
+  const percentInput = h("input", {
+    class: "app-input",
+    type: "number",
+    step: "0.01",
+    placeholder: "Ej. 10 para +10%",
+    "aria-label": "Porcentaje de aumento",
+  });
+  const priceStatus = h("p", { class: "muted" }, "");
+  const raiseBtn = h("button", { class: "btn", type: "button" }, "Aplicar aumento");
+  raiseBtn.addEventListener("click", async () => {
+    const percent = Number(percentInput.value);
+    if (!Number.isFinite(percent) || percent === 0) {
+      priceStatus.textContent = "Indique el porcentaje (puede ser negativo para bajar).";
+      return;
+    }
+    const ok = window.confirm(`¿Subir todos los precios de venta un ${percent}%?`);
+    if (!ok) {
+      return;
+    }
+    raiseBtn.disabled = true;
+    try {
+      const count = await raiseSalePrices(percent);
+      priceStatus.textContent = `Se actualizaron ${count} productos.`;
+      await runSync(true);
+    } catch (err) {
+      priceStatus.textContent = err.message || "No se pudieron actualizar los precios.";
+    } finally {
+      raiseBtn.disabled = false;
+    }
   });
 
   const backupStatus = h(
@@ -260,6 +315,15 @@ export async function renderConfig(root) {
         stockInput,
         saveStock
       )
+    ),
+    h(
+      "section",
+      { class: "glass cat-card", style: "margin-top:0.9rem" },
+      h("h3", {}, "Subir precios lineales por porcentaje"),
+      h("p", { class: "muted" }, "Aplica el porcentaje a todos los precios de venta REF del catálogo y deja el cambio en el histórico."),
+      percentInput,
+      h("div", { class: "acc-actions" }, raiseBtn),
+      priceStatus
     ),
     h(
       "section",

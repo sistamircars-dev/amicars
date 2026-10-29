@@ -3,7 +3,8 @@ import { createCombo } from "./combo.js";
 import { createDateField } from "./dateField.js?v=34";
 import { db } from "./db.js";
 import { h } from "./dom.js";
-import { formatDisplayDate, formatRate, registerEntrada, tasaFor, todayLocal } from "./movements.js?v=49";
+import { ensureRateForDate } from "./bcvView.js?v=52";
+import { formatDisplayDate, formatRate, registerEntrada, todayLocal } from "./movements.js?v=52";
 import { mountLines } from "./opsLines.js?v=40";
 import { saveLocal } from "./repository.js";
 import { mountCampoEditor, retireCampo } from "./taxonomy.js?v=36";
@@ -74,7 +75,7 @@ export async function mountEntrada(host, { onSaved } = {}) {
   let items = [];
   let extraFields = [];
   let linesApi = null;
-  let tasa = await tasaFor(llegada.value);
+  let tasa = await ensureRateForDate(llegada.value);
   const rateLabel = h("p", { class: "muted" }, rateText(tasa, true));
 
   async function paintLines() {
@@ -125,12 +126,17 @@ export async function mountEntrada(host, { onSaved } = {}) {
     }
   }
 
-  llegada.addEventListener("change", async () => {
-    tasa = await tasaFor(llegada.value);
-    rateLabel.textContent = rateText(tasa, false);
+  async function applyRateForDate() {
+    rateLabel.textContent = "Consultando tasa BCV de la fecha…";
+    tasa = await ensureRateForDate(llegada.value);
+    rateLabel.textContent = rateText(tasa, true);
     if (linesApi) {
       linesApi.setTasa(tasa);
     }
+  }
+
+  llegada.addEventListener("change", () => {
+    applyRateForDate();
   });
 
   const nuevo = h("button", { class: "btn ghost", type: "button" }, "Nuevo");
@@ -239,7 +245,7 @@ export async function mountEntrada(host, { onSaved } = {}) {
       items = [];
       numero.value = "";
       llegada.value = todayLocal();
-      tasa = await tasaFor(llegada.value);
+      tasa = await ensureRateForDate(llegada.value);
       rateLabel.textContent = rateText(tasa, true);
       await paintLines();
     } catch (err) {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 import cloudinary
 import cloudinary.uploader
@@ -12,7 +13,23 @@ FOLDER = "amircars/repuestos"
 
 
 def _clean(value: str | None) -> str:
-    return (value or "").strip().strip('"').strip("'")
+    text = (value or "").strip().strip('"').strip("'")
+    if text.upper().startswith("CLOUDINARY_URL="):
+        text = text.split("=", 1)[1].strip().strip('"').strip("'")
+    return text.replace("\n", "").replace("\r", "").strip()
+
+
+def _parse_url(url: str) -> dict[str, str]:
+    raw = _clean(url)
+    if not raw.startswith("cloudinary://"):
+        return {}
+    parsed = urlparse(raw)
+    name = (parsed.hostname or "").strip()
+    key = unquote(parsed.username or "").strip()
+    secret = unquote(parsed.password or "").strip()
+    if name and key and secret:
+        return {"cloud_name": name, "api_key": key, "api_secret": secret}
+    return {}
 
 
 def cloudinary_settings() -> dict[str, str]:
@@ -20,22 +37,32 @@ def cloudinary_settings() -> dict[str, str]:
     name = _clean(current_app.config.get("CLOUDINARY_CLOUD_NAME"))
     key = _clean(current_app.config.get("CLOUDINARY_API_KEY"))
     secret = _clean(current_app.config.get("CLOUDINARY_API_SECRET"))
-    if url.startswith("cloudinary://") and "@" in url:
-        return {"cloudinary_url": url}
+    from_url = _parse_url(url)
+    if from_url:
+        return from_url
+    if url and not url.startswith("cloudinary://") and "://" not in url and len(url) >= 16 and not secret:
+        secret = url
     if name and key and secret:
         return {"cloud_name": name, "api_key": key, "api_secret": secret}
     return {}
 
 
 def cloudinary_ready() -> bool:
-    return bool(cloudinary_settings())
+    cfg = cloudinary_settings()
+    return bool(cfg.get("cloud_name") and cfg.get("api_key") and cfg.get("api_secret"))
 
 
-def _configure() -> None:
+def _configure() -> dict[str, str]:
     settings = cloudinary_settings()
     if not settings:
         raise RuntimeError("Cloudinary no está configurada en el servidor")
-    cloudinary.config(secure=True, **settings)
+    cloudinary.config(
+        cloud_name=settings["cloud_name"],
+        api_key=settings["api_key"],
+        api_secret=settings["api_secret"],
+        secure=True,
+    )
+    return settings
 
 
 def upload_image_bytes(raw: bytes, public_id: str | None = None) -> dict[str, Any]:
@@ -58,7 +85,9 @@ def upload_image_bytes(raw: bytes, public_id: str | None = None) -> dict[str, An
         options["unique_filename"] = False
         options["overwrite"] = True
         options["invalidate"] = True
-    result = cloudinary.uploader.upload(io.BytesIO(raw), **options)
+    stream = io.BytesIO(raw)
+    stream.name = "pieza.jpg"
+    result = cloudinary.uploader.upload(stream, **options)
     pid = result["public_id"]
     thumb, _ = cloudinary_url(
         pid,
