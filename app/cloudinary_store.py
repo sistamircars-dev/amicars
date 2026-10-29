@@ -12,11 +12,30 @@ from flask import current_app
 FOLDER = "amircars/repuestos"
 
 
+_PLACEHOLDERS = {
+    "",
+    "api_key",
+    "api_secret",
+    "cloud_name",
+    "your_api_key",
+    "your_api_secret",
+    "your_cloud_name",
+    "<your_api_key>",
+    "<your_api_secret>",
+    "<your_cloud_name>",
+    "<cloud_name>",
+}
+
+
 def _clean(value: str | None) -> str:
     text = (value or "").strip().strip('"').strip("'")
     if text.upper().startswith("CLOUDINARY_URL="):
         text = text.split("=", 1)[1].strip().strip('"').strip("'")
-    return text.replace("\n", "").replace("\r", "").strip()
+    text = text.replace("\n", "").replace("\r", "").strip()
+    folded = text.lower().strip("<>").strip()
+    if folded in _PLACEHOLDERS or folded.startswith("your_") or folded.startswith("<your_"):
+        return ""
+    return text
 
 
 def _parse_url(url: str) -> dict[str, str]:

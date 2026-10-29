@@ -42,16 +42,21 @@ def upload():
     except Exception as exc:
         current_app.logger.exception("Cloudinary upload failed")
         detail = re.sub(r"\s+", " ", str(exc)).strip()[:180]
-        return jsonify(
-            {
-                "ok": False,
-                "error": (
-                    "Cloudinary no aceptó la subida. En Render use CLOUDINARY_URL "
-                    "(cloudinary://API_KEY:API_SECRET@CLOUD_NAME) o las tres variables "
-                    "CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY y CLOUDINARY_API_SECRET."
-                    + (f" Detalle: {detail}" if detail else "")
-                ),
-            }
-        ), 502
+        low = detail.lower()
+        if "invalid api_key" in low or "your_api_key" in low:
+            message = (
+                "Cloudinary rechazó la API key: en Render quedó el ejemplo <your_api_key>. "
+                "Borre CLOUDINARY_URL si es de ejemplo y deje las tres variables reales "
+                "(CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET), "
+                "o pegue la URL completa del dashboard de Cloudinary."
+            )
+        else:
+            message = (
+                "Cloudinary no aceptó la subida. En Render use CLOUDINARY_URL "
+                "(cloudinary://API_KEY:API_SECRET@CLOUD_NAME) o las tres variables "
+                "CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY y CLOUDINARY_API_SECRET."
+                + (f" Detalle: {detail}" if detail else "")
+            )
+        return jsonify({"ok": False, "error": message}), 502
 
     return jsonify({"ok": True, **stored}), 200
