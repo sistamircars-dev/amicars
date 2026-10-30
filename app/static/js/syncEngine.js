@@ -1,8 +1,10 @@
-import { healthCheck, pullChanges, pushQueue, refreshSession, restoreCloudPhotos, uploadMediaBlob } from "./api.js";
+import { fetchPhotoIndex, healthCheck, pullChanges, publishPhotoIndex, pushQueue, refreshSession, restoreCloudPhotos, uploadMediaBlob } from "./api.js";
 import { flushCloudPurge } from "./archiveVault.js";
 import { db, ENTITY_TABLES, PUSH_ORDER, getMeta, nowIso, pendingCount, setMeta } from "./db.js";
 import { applyRemoteRevision } from "./pwa.js";
+import { applyPhotoIndex, collectPhotoIndex } from "./photoIndex.js";
 import { enqueue, saveLocal, SOFT_DELETE_TABLES } from "./repository.js";
+import { setConfig } from "./store.js";
 import { bindRetry, setSyncStatus } from "./syncStatus.js";
 
 const BATCH = 40;
@@ -204,36 +206,44 @@ async function restoreActiveCloudPhotos() {
 
 async function publishLocalCloudImages(force = false) {
   const mark = await getMeta("photos_published_rev", "");
-  if (!force && mark === "58") {
+  if (!force && mark === "59") {
     return 0;
   }
-  const products = await db.productos.toArray();
-  const activeIds = new Set(products.filter((row) => row.is_active !== false).map((row) => row.id));
-  const images = await db.producto_imagenes.toArray();
-  let count = 0;
-  for (const row of images) {
-    let url = String(row.cloudinary_url || "").trim();
-    const pid = String(row.cloudinary_public_id || "").trim();
-    if (!url && !pid) {
-      continue;
+  const items = await collectPhotoIndex();
+  const count = await applyPhotoIndex(items, { enqueue: true });
+  if (items.length) {
+    try {
+      await publishPhotoIndex(items);
+    } catch (_err) {
+      /* El push de producto_imagenes sigue en la cola. */
     }
-    if (!url && pid) {
-      const path = pid.replace(/^\/+/, "");
-      url = `https://res.cloudinary.com/mwzczz6i/image/upload/f_auto,q_auto/${path}`;
+    try {
+      await setConfig("fotos_nube", { items, exported_at: nowIso() });
+    } catch (_err) {
+      /* Índice auxiliar; las filas ya van en la cola. */
     }
-    const next = {
-      ...row,
-      cloudinary_url: url,
-      cloudinary_public_id: pid || row.cloudinary_public_id,
-      is_active: activeIds.has(row.producto_id) ? true : row.is_active,
-      updated_at: nowIso(),
-    };
-    await db.producto_imagenes.put(next);
-    await enqueue("producto_imagenes", "update", next);
-    count += 1;
   }
-  await setMeta("photos_published_rev", "58");
+  await setMeta("photos_published_rev", "59");
   return count;
+}
+
+async function hydratePublishedPhotos() {
+  const fromConfig = await db.configuracion_sistema.where("clave").equals("fotos_nube").first();
+  const extra =
+    fromConfig && fromConfig.valor && Array.isArray(fromConfig.valor.items) ? fromConfig.valor.items : [];
+  let remote = [];
+  try {
+    const result = await fetchPhotoIndex();
+    if (result.ok && result.data && Array.isArray(result.data.items)) {
+      remote = result.data.items;
+    }
+  } catch (_err) {
+    /* Se usan las filas del pull. */
+  }
+  if (!extra.length && !remote.length) {
+    return 0;
+  }
+  return applyPhotoIndex([...extra, ...remote], { enqueue: false });
 }
 
 async function flushMedia() {
@@ -665,6 +675,7 @@ export async function runSync(force = false) {
       }
     }
     await restoreActiveCloudPhotos();
+    await hydratePublishedPhotos();
     try {
       await flushQueue();
     } catch (_err) {
@@ -720,4 +731,47 @@ export function startSyncEngine() {
   refreshOfflineBadge().then(() => runSync(true));
 }
 
-export { enqueue };
+export async function publishPhotosFromThisDevice() {
+  for (let step = 0; step < 40 && running; step += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
+  }
+  running = true;
+  setSyncStatus("syncing");
+  try {
+    await flushMedia();
+    const items = await collectPhotoIndex();
+    const applied = await applyPhotoIndex(items, { enqueue: true });
+    let upserted = 0;
+    if (items.length) {
+      const posted = await publishPhotoIndex(items);
+      if (!posted.ok) {
+        throw new Error((posted.data && posted.data.error) || `HTTP ${posted.status}`);
+      }
+      upserted = Number((posted.data && posted.data.upserted) || 0);
+      await setConfig("fotos_nube", { items, exported_at: nowIso() });
+    }
+    try {
+      await flushQueue();
+    } catch (_err) {
+      /* next heartbeat */
+    }
+    await setMeta("photos_published_rev", "59");
+    const leftover = await pendingCount();
+    await statusFromCounts(leftover);
+    return { local: items.length, applied, upserted };
+  } catch (err) {
+    const leftover = await pendingCount();
+    await statusFromCounts(leftover, String(err && err.message ? err.message : err));
+    throw err;
+  } finally {
+    running = false;
+  }
+}
+
+export async function pullPublishedPhotos() {
+  await pullRemote(true);
+  const applied = await hydratePublishedPhotos();
+  return { applied };
+}
+
+export { enqueue, collectPhotoIndex };

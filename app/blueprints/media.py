@@ -122,3 +122,97 @@ def restore_cloud():
             restored += 1
 
     return jsonify({"ok": True, "restored": restored}), 200
+
+
+def _cloud_url(public_id: str, image_id: str) -> str:
+    pid = (public_id or "").strip().lstrip("/")
+    if pid:
+        return f"https://res.cloudinary.com/mwzczz6i/image/upload/f_auto,q_auto/{pid}"
+    iid = (image_id or "").strip().lower()
+    if iid:
+        return f"https://res.cloudinary.com/mwzczz6i/image/upload/f_auto,q_auto/amircars/repuestos/{iid}"
+    return ""
+
+
+@bp.get("/index")
+@login_required
+@limiter.limit("30 per minute")
+def photo_index():
+    client = user_client()
+    try:
+        result = (
+            client.table("producto_imagenes")
+            .select("id,producto_id,cloudinary_url,cloudinary_public_id,alt_text,orden,is_cover,is_active")
+            .limit(2000)
+            .execute()
+        )
+    except Exception as exc:
+        current_app.logger.exception("photo index list failed")
+        return jsonify({"ok": False, "error": str(exc)[:180]}), 502
+    return jsonify({"ok": True, "items": result.data or []}), 200
+
+
+@bp.post("/index")
+@login_required
+@csrf.exempt
+@limiter.limit("8 per minute")
+def publish_photo_index():
+    body = request.get_json(silent=True) or {}
+    raw_items = body.get("items") if isinstance(body, dict) else None
+    if not isinstance(raw_items, list):
+        return jsonify({"ok": False, "error": "Falta la lista de fotos"}), 400
+
+    client = user_client()
+    try:
+        products = client.table("productos").select("id,is_active").execute()
+    except Exception as exc:
+        current_app.logger.exception("photo index products failed")
+        return jsonify({"ok": False, "error": str(exc)[:180]}), 502
+
+    state = {str(row.get("id")): row.get("is_active") is not False for row in products.data or []}
+    stamp = _now()
+    upserted = 0
+    skipped = 0
+    batch: list[dict] = []
+
+    for raw in raw_items[:800]:
+        if not isinstance(raw, dict):
+            skipped += 1
+            continue
+        image_id = str(raw.get("id") or "").strip()
+        producto_id = str(raw.get("producto_id") or "").strip()
+        public_id = str(raw.get("cloudinary_public_id") or "").strip()
+        url = str(raw.get("cloudinary_url") or "").strip() or _cloud_url(public_id, image_id)
+        if not image_id or not producto_id or not url or producto_id not in state:
+            skipped += 1
+            continue
+        if not public_id:
+            public_id = f"amircars/repuestos/{image_id.lower()}"
+        try:
+            orden = int(raw.get("orden") or 0)
+        except (TypeError, ValueError):
+            orden = 0
+        batch.append(
+            {
+                "id": image_id,
+                "producto_id": producto_id,
+                "cloudinary_url": url,
+                "cloudinary_public_id": public_id,
+                "alt_text": str(raw.get("alt_text") or "")[:240],
+                "orden": orden,
+                "is_cover": bool(raw.get("is_cover")),
+                "is_active": state[producto_id],
+                "updated_at": stamp,
+            }
+        )
+
+    try:
+        for start in range(0, len(batch), 80):
+            chunk = batch[start : start + 80]
+            client.table("producto_imagenes").upsert(chunk, on_conflict="id").execute()
+            upserted += len(chunk)
+    except Exception as exc:
+        current_app.logger.exception("photo index upsert failed")
+        return jsonify({"ok": False, "error": str(exc)[:180], "upserted": upserted, "skipped": skipped}), 502
+
+    return jsonify({"ok": True, "upserted": upserted, "skipped": skipped}), 200

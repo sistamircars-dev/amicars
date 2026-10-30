@@ -108,6 +108,14 @@ export async function restoreCloudPhotos() {
   return requestAuth("/api/media/restore-cloud", { method: "POST", json: {} });
 }
 
+export async function publishPhotoIndex(items) {
+  return requestAuth("/api/media/index", { method: "POST", json: { items } });
+}
+
+export async function fetchPhotoIndex() {
+  return requestAuth("/api/media/index");
+}
+
 export async function fetchBcvToday() {
   return request("/api/bcv/hoy");
 }

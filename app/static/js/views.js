@@ -1,5 +1,5 @@
 import { renderBitacora } from "./bitacora.js";
-import { renderConfig } from "./bcvView.js?v=52";
+import { renderConfig } from "./bcvView.js?v=53";
 import { renderEntradas } from "./entradas.js?v=52";
 import { renderFallas } from "./fallas.js?v=40";
 import { renderInventory } from "./inventory.js?v=54";

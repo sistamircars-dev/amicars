@@ -8,7 +8,8 @@ import { countBackupRows, downloadBackup, exportLocalBackup, restoreLocalBackup 
 import { formatDisplayDate, formatRate } from "./movements.js";
 import { downloadClientScript, runInstallSetup } from "./pwa.js?v=52";
 import { getConfig, getTasa, setConfig, upsertTasa } from "./store.js";
-import { runSync } from "./syncEngine.js";
+import { collectPhotoIndex, downloadPhotoIndex, importPhotoSource } from "./photoIndex.js";
+import { publishPhotosFromThisDevice, pullPublishedPhotos, runSync } from "./syncEngine.js";
 
 export async function refreshRateChip() {
   const chip = document.getElementById("rate-chip");
@@ -181,6 +182,90 @@ export async function renderConfig(root) {
     fileInput.click();
   });
 
+  const photoStatus = h(
+    "p",
+    { class: "muted" },
+    "La sync de catálogo no trae los archivos de la otra PC. Hay que publicar el índice de fotos desde el equipo donde se cargaron."
+  );
+  const publishPhotosBtn = h("button", { class: "btn", type: "button" }, "Publicar fotos de ESTE equipo");
+  const pullPhotosBtn = h("button", { class: "btn ghost", type: "button" }, "Buscar fotos ya publicadas");
+  const downloadPhotosBtn = h("button", { class: "btn ghost", type: "button" }, "Descargar índice de fotos");
+  const importPhotosBtn = h("button", { class: "btn ghost", type: "button" }, "Importar índice o respaldo");
+  const photoInput = h("input", {
+    type: "file",
+    accept: "application/json,.json",
+    hidden: "hidden",
+  });
+
+  publishPhotosBtn.addEventListener("click", async () => {
+    publishPhotosBtn.disabled = true;
+    photoStatus.textContent = "Publicando fotos de este equipo a la nube…";
+    try {
+      const result = await publishPhotosFromThisDevice();
+      photoStatus.textContent =
+        result.local < 1
+          ? "En este equipo no hay fotos locales para publicar. Use este botón en la PC donde se cargaron las imágenes."
+          : `Publicadas ${result.upserted} de ${result.local} fotos. En la otra PC pulse “Buscar fotos ya publicadas”.`;
+    } catch (err) {
+      photoStatus.textContent = (err && err.message) || "No se pudieron publicar las fotos.";
+    } finally {
+      publishPhotosBtn.disabled = false;
+    }
+  });
+
+  pullPhotosBtn.addEventListener("click", async () => {
+    pullPhotosBtn.disabled = true;
+    photoStatus.textContent = "Buscando fotos publicadas…";
+    try {
+      const result = await pullPublishedPhotos();
+      photoStatus.textContent =
+        result.applied > 0
+          ? `Se trajeron ${result.applied} fotos. Recargue inventario si no las ve aún.`
+          : "La nube aún no tiene el índice. Ábralo en la PC donde están las fotos y pulse “Publicar fotos de ESTE equipo”.";
+    } catch (err) {
+      photoStatus.textContent = (err && err.message) || "No se pudieron traer las fotos.";
+    } finally {
+      pullPhotosBtn.disabled = false;
+    }
+  });
+
+  downloadPhotosBtn.addEventListener("click", async () => {
+    downloadPhotosBtn.disabled = true;
+    try {
+      const items = await collectPhotoIndex();
+      if (!items.length) {
+        photoStatus.textContent = "En este equipo no hay un índice de fotos para descargar.";
+        return;
+      }
+      downloadPhotoIndex(items);
+      photoStatus.textContent = `Índice descargado (${items.length} fotos). Ábralo en Configuración de la otra PC.`;
+    } catch (err) {
+      photoStatus.textContent = (err && err.message) || "No se pudo descargar el índice.";
+    } finally {
+      downloadPhotosBtn.disabled = false;
+    }
+  });
+
+  importPhotosBtn.addEventListener("click", () => photoInput.click());
+  photoInput.addEventListener("change", async () => {
+    const file = photoInput.files && photoInput.files[0];
+    photoInput.value = "";
+    if (!file) {
+      return;
+    }
+    importPhotosBtn.disabled = true;
+    photoStatus.textContent = "Importando fotos…";
+    try {
+      const summary = await importPhotoSource(await file.text());
+      await runSync(true);
+      photoStatus.textContent = `Importadas ${summary.applied} fotos${summary.queued ? ` y ${summary.queued} en cola local` : ""}.`;
+    } catch (err) {
+      photoStatus.textContent = (err && err.message) || "No se pudo importar el archivo.";
+    } finally {
+      importPhotosBtn.disabled = false;
+    }
+  });
+
   const memoryStatus = h("p", { class: "muted" }, "Calculando memoria local…");
   const folderBtn = h("button", { class: "btn", type: "button" }, "Elegir carpeta de archivo");
   const archiveNow = h("button", { class: "btn ghost", type: "button" }, "Archivar histórico ahora");
@@ -324,6 +409,19 @@ export async function renderConfig(root) {
       percentInput,
       h("div", { class: "acc-actions" }, raiseBtn),
       priceStatus
+    ),
+    h(
+      "section",
+      { class: "glass cat-card", style: "margin-top:0.9rem" },
+      h("h3", {}, "Fotos entre equipos"),
+      h(
+        "p",
+        { class: "muted" },
+        "Los archivos originales quedan en el navegador de la PC donde se cargaron. En ESA computadora pulse “Publicar fotos de ESTE equipo”. En esta, pulse “Buscar fotos ya publicadas”. Si no hay red entre las dos, descargue el índice allá e impórtelo aquí."
+      ),
+      h("div", { class: "acc-actions" }, publishPhotosBtn, pullPhotosBtn, downloadPhotosBtn, importPhotosBtn),
+      photoInput,
+      photoStatus
     ),
     h(
       "section",
