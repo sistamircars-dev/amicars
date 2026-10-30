@@ -1,8 +1,8 @@
-import { healthCheck, pullChanges, pushQueue, refreshSession, uploadMediaBlob } from "./api.js";
+import { healthCheck, pullChanges, pushQueue, refreshSession, restoreCloudPhotos, uploadMediaBlob } from "./api.js";
 import { flushCloudPurge } from "./archiveVault.js";
 import { db, ENTITY_TABLES, PUSH_ORDER, getMeta, nowIso, pendingCount, setMeta } from "./db.js";
 import { applyRemoteRevision } from "./pwa.js";
-import { enqueue, saveLocal } from "./repository.js";
+import { enqueue, saveLocal, SOFT_DELETE_TABLES } from "./repository.js";
 import { bindRetry, setSyncStatus } from "./syncStatus.js";
 
 const BATCH = 40;
@@ -157,10 +157,106 @@ async function refreshOfflineBadge() {
   return counts;
 }
 
+function isBlob(value) {
+  return typeof Blob !== "undefined" && value instanceof Blob && value.size > 0;
+}
+
+async function harvestLocalImageBlobs() {
+  const images = await db.producto_imagenes.toArray();
+  for (const row of images) {
+    const url = String(row.cloudinary_url || "").trim();
+    if (url || !isBlob(row.local_blob)) {
+      continue;
+    }
+    const queued = await db.offline_media_queue.get(row.id);
+    if (queued && isBlob(queued.blob)) {
+      continue;
+    }
+    await db.offline_media_queue.put({
+      id: row.id,
+      producto_id: row.producto_id,
+      filename: row.alt_text || "pieza.jpg",
+      mime: row.local_blob.type || "image/jpeg",
+      blob: row.local_blob,
+      orden: row.orden || 0,
+      is_cover: Boolean(row.is_cover),
+      alt_text: row.alt_text || "",
+      created_at: row.created_at || nowIso(),
+      attempts: 0,
+      last_error: null,
+    });
+  }
+}
+
+async function restoreActiveCloudPhotos() {
+  const products = await db.productos.toArray();
+  const activeIds = new Set(products.filter((row) => row.is_active !== false).map((row) => row.id));
+  const images = await db.producto_imagenes.toArray();
+  for (const row of images) {
+    const url = String(row.cloudinary_url || "").trim();
+    const pid = String(row.cloudinary_public_id || "").trim();
+    if (row.is_active !== false || !activeIds.has(row.producto_id) || (!url && !pid)) {
+      continue;
+    }
+    await saveLocal("producto_imagenes", { ...row, is_active: true }, "update");
+  }
+}
+
+async function publishLocalCloudImages(force = false) {
+  const mark = await getMeta("photos_published_rev", "");
+  if (!force && mark === "58") {
+    return 0;
+  }
+  const products = await db.productos.toArray();
+  const activeIds = new Set(products.filter((row) => row.is_active !== false).map((row) => row.id));
+  const images = await db.producto_imagenes.toArray();
+  let count = 0;
+  for (const row of images) {
+    let url = String(row.cloudinary_url || "").trim();
+    const pid = String(row.cloudinary_public_id || "").trim();
+    if (!url && !pid) {
+      continue;
+    }
+    if (!url && pid) {
+      const path = pid.replace(/^\/+/, "");
+      url = `https://res.cloudinary.com/mwzczz6i/image/upload/f_auto,q_auto/${path}`;
+    }
+    const next = {
+      ...row,
+      cloudinary_url: url,
+      cloudinary_public_id: pid || row.cloudinary_public_id,
+      is_active: activeIds.has(row.producto_id) ? true : row.is_active,
+      updated_at: nowIso(),
+    };
+    await db.producto_imagenes.put(next);
+    await enqueue("producto_imagenes", "update", next);
+    count += 1;
+  }
+  await setMeta("photos_published_rev", "58");
+  return count;
+}
+
 async function flushMedia() {
+  await harvestLocalImageBlobs();
   const pending = await db.offline_media_queue.orderBy("created_at").toArray();
   for (const item of pending) {
-    const result = await uploadMediaBlob(item.blob, item.filename, item.id);
+    if (!isBlob(item.blob)) {
+      await db.offline_media_queue.update(item.id, {
+        attempts: (item.attempts || 0) + 1,
+        last_error: "Sin archivo local",
+      });
+      continue;
+    }
+    let result;
+    try {
+      result = await uploadMediaBlob(item.blob, item.filename, item.id, item.producto_id);
+    } catch (err) {
+      await db.offline_media_queue.update(item.id, {
+        attempts: (item.attempts || 0) + 1,
+        last_error: String(err && err.message ? err.message : err),
+      });
+      continue;
+    }
     if (!result.ok || !result.data || !result.data.ok) {
       await db.offline_media_queue.update(item.id, {
         attempts: (item.attempts || 0) + 1,
@@ -168,19 +264,20 @@ async function flushMedia() {
       });
       continue;
     }
+    const existing = await db.producto_imagenes.get(item.id);
     const imageRow = {
+      ...(existing || {}),
       id: item.id,
       producto_id: item.producto_id,
       cloudinary_url: result.data.url,
       cloudinary_public_id: result.data.public_id,
       alt_text: item.alt_text || "",
       orden: item.orden || 0,
-      is_cover: Boolean(item.is_cover),
+      is_cover: Boolean(item.is_cover) || Boolean(existing && existing.is_cover),
       is_active: true,
       thumbnail_url: result.data.thumbnail_url,
     };
-    const exists = await db.producto_imagenes.get(item.id);
-    await saveLocal("producto_imagenes", imageRow, exists ? "update" : "insert");
+    await saveLocal("producto_imagenes", imageRow, existing ? "update" : "insert");
     await db.offline_media_queue.delete(item.id);
   }
 }
@@ -282,7 +379,49 @@ async function ensureParents() {
   }
 }
 
+async function rewriteQueuedSoftDeletes() {
+  const rows = await db.sync_queue.toArray();
+  for (const row of rows) {
+    if (row.op !== "delete") {
+      continue;
+    }
+    if (row.table === "producto_imagenes") {
+      await db.sync_queue.delete(row.id);
+      continue;
+    }
+    if (!SOFT_DELETE_TABLES.has(row.table)) {
+      continue;
+    }
+    const payload = { ...(row.payload || {}), id: row.entity_id, is_active: false, updated_at: nowIso() };
+    await db.sync_queue.update(row.id, {
+      op: "update",
+      payload,
+      updated_at: payload.updated_at,
+      last_error: null,
+    });
+    const local = await db.table(row.table).get(row.entity_id);
+    if (local && local.is_active !== false) {
+      await db.table(row.table).put({ ...local, is_active: false, updated_at: payload.updated_at });
+    }
+  }
+}
+
 async function softenPayload(row, err) {
+  if (row.op === "delete" && (SOFT_DELETE_TABLES.has(row.table) || isFkError(err))) {
+    const payload = { ...(row.payload || {}), id: row.entity_id, is_active: false, updated_at: nowIso() };
+    await db.sync_queue.update(row.id, {
+      op: "update",
+      payload,
+      updated_at: payload.updated_at,
+      attempts: 0,
+      last_error: null,
+    });
+    const local = await db.table(row.table).get(row.entity_id);
+    if (local) {
+      await db.table(row.table).put({ ...local, is_active: false, updated_at: payload.updated_at });
+    }
+    return true;
+  }
   if (!isFkError(err)) {
     return false;
   }
@@ -337,6 +476,7 @@ async function softenPayload(row, err) {
 }
 
 async function flushQueue() {
+  await rewriteQueuedSoftDeletes();
   await collapseDuplicateProveedores();
   for (let round = 0; round < 12; round += 1) {
     await ensureParents();
@@ -498,7 +638,25 @@ export async function runSync(force = false) {
     if (!sessionOk) {
       throw new Error("Sesión expirada; vuelva a entrar.");
     }
-    await flushQueue();
+    try {
+      await flushMedia();
+    } catch (_err) {
+      /* Las fotos no deben bloquear el resto de la sync. */
+    }
+    await restoreActiveCloudPhotos();
+    try {
+      await restoreCloudPhotos();
+    } catch (_err) {
+      /* El restore local ya encoló las filas activas. */
+    }
+    await publishLocalCloudImages(force);
+    try {
+      await flushQueue();
+    } catch (err) {
+      if (/sesión|401|autentic/i.test(String(err && err.message))) {
+        throw err;
+      }
+    }
     try {
       await pullRemote(force);
     } catch (err) {
@@ -506,7 +664,17 @@ export async function runSync(force = false) {
         throw err;
       }
     }
-    await flushMedia();
+    await restoreActiveCloudPhotos();
+    try {
+      await flushQueue();
+    } catch (_err) {
+      /* Si el push de catálogo falla, igual se reintenta el media. */
+    }
+    try {
+      await flushMedia();
+    } catch (_err) {
+      /* next heartbeat */
+    }
     await flushCloudPurge();
     await applyRemoteRevision();
     const leftover = await pendingCount();

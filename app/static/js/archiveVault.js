@@ -200,7 +200,19 @@ export async function flushCloudPurge() {
   if (!pending.length) {
     return { ok: true, count: 0 };
   }
-  const batch = pending.slice(0, 200);
+  const photos = pending.filter((item) => item.table === "producto_imagenes");
+  const others = pending.filter((item) => item.table !== "producto_imagenes");
+  if (photos.length && photos.length === pending.length) {
+    await setMeta("pending_cloud_purge", []);
+    return { ok: true, count: 0, kept_photos: photos.length };
+  }
+  if (photos.length) {
+    await setMeta("pending_cloud_purge", others);
+  }
+  const batch = others.slice(0, 200);
+  if (!batch.length) {
+    return { ok: true, count: 0, kept_photos: photos.length };
+  }
   const result = await purgeArchived(batch);
   if (!result.ok || !result.data || result.data.ok !== true) {
     return { ok: false, error: (result.data && result.data.error) || `HTTP ${result.status}` };
@@ -208,7 +220,7 @@ export async function flushCloudPurge() {
   const done = new Set(batch.map((item) => `${item.table}:${item.id}`));
   await setMeta(
     "pending_cloud_purge",
-    pending.filter((item) => !done.has(`${item.table}:${item.id}`))
+    others.filter((item) => !done.has(`${item.table}:${item.id}`))
   );
   await setMeta("last_cloud_purge_at", nowIso());
   return { ok: true, count: batch.length };

@@ -99,7 +99,44 @@ def _configure() -> dict[str, str]:
     return settings
 
 
-def upload_image_bytes(raw: bytes, public_id: str | None = None) -> dict[str, Any]:
+def list_folder_images(max_results: int = 500) -> list[dict[str, Any]]:
+    _configure()
+    import cloudinary.api
+
+    out: list[dict[str, Any]] = []
+    next_cursor = None
+    while len(out) < max_results:
+        kwargs: dict[str, Any] = {
+            "type": "upload",
+            "prefix": FOLDER,
+            "max_results": min(100, max_results - len(out)),
+            "resource_type": "image",
+        }
+        if next_cursor:
+            kwargs["next_cursor"] = next_cursor
+        result = cloudinary.api.resources(**kwargs)
+        for row in result.get("resources") or []:
+            ctx = row.get("context") or {}
+            if isinstance(ctx, dict):
+                ctx = ctx.get("custom") or ctx
+            out.append(
+                {
+                    "public_id": row.get("public_id"),
+                    "url": row.get("secure_url") or row.get("url"),
+                    "bytes": row.get("bytes"),
+                    "created_at": row.get("created_at"),
+                    "context": ctx,
+                }
+            )
+        next_cursor = result.get("next_cursor")
+        if not next_cursor:
+            break
+    return out
+
+
+def upload_image_bytes(
+    raw: bytes, public_id: str | None = None, context: str | None = None
+) -> dict[str, Any]:
     _configure()
     options: dict[str, Any] = {
         "resource_type": "image",
@@ -109,6 +146,8 @@ def upload_image_bytes(raw: bytes, public_id: str | None = None) -> dict[str, An
         "invalidate": False,
         "folder": FOLDER,
     }
+    if context:
+        options["context"] = context
     if public_id:
         cleaned = public_id.strip().lstrip("/")
         if cleaned.startswith(f"{FOLDER}/"):

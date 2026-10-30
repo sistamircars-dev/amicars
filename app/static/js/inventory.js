@@ -1,4 +1,4 @@
-import { coverFor, deleteProduct, formatPair, loadContext, matchesFieldFilters, matchesQuery, productBlob, safeImg } from "./catalog.js?v=53";
+import { coverFor, deleteProduct, formatPair, loadContext, matchesFieldFilters, matchesQuery, productBlob, safeImg } from "./catalog.js?v=54";
 import { db } from "./db.js";
 import { downloadTablePdf, downloadXlsx } from "./exportDocs.js?v=40";
 import { h } from "./dom.js";

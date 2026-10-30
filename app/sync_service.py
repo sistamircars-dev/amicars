@@ -73,6 +73,29 @@ _NULLABLE_FKS = {
 _FK_COLS = ("categoria_id", "subcategoria_id", "proveedor_id", "producto_id")
 
 
+def _can_soft_delete(table: str) -> bool:
+    return table not in IMMUTABLE_TABLES and "is_active" in COLUMNS.get(table, ())
+
+
+def _soft_delete(client, table: str, entity_id: str, row: dict[str, Any]) -> None:
+    patch = {"is_active": False, "updated_at": row.get("updated_at") or utc_now()}
+    client.table(table).update(patch).eq("id", entity_id).execute()
+
+
+def _apply_delete(client, table: str, entity_id: str, row: dict[str, Any]) -> None:
+    if _can_soft_delete(table):
+        _soft_delete(client, table, entity_id, row)
+        return
+    try:
+        client.table(table).delete().eq("id", entity_id).execute()
+    except Exception as exc:
+        if not _is_fk_error(exc):
+            raise
+        if not _can_soft_delete(table):
+            raise
+        _soft_delete(client, table, entity_id, row)
+
+
 def _null_broken_fks(table: str, row: dict[str, Any], exc: Exception) -> bool:
     message = str(exc).lower()
     cols = _NULLABLE_FKS.get(table, ())
@@ -143,9 +166,13 @@ def apply_push(raw: dict[str, Any]) -> dict[str, Any]:
             continue
         try:
             payload = _rewrite_with_remaps(item.payload, remaps)
+            op = item.op
+            if op == "delete" and _can_soft_delete(item.table):
+                payload = {**payload, "is_active": False}
+                op = "update"
             row = sanitize_row(item.table, payload, item.id)
-            if item.op == "delete":
-                client.table(item.table).delete().eq("id", item.id).execute()
+            if op == "delete":
+                _apply_delete(client, item.table, item.id, row)
                 accepted.append(item.id)
                 continue
             if item.table == "tasas_bcv" and row.get("fecha"):

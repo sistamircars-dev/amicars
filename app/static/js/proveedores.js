@@ -11,7 +11,7 @@ import {
 import { createDateField } from "./dateField.js?v=34";
 import { promptJustification } from "./promptJustification.js?v=49";
 import { openProductForm } from "./productForm.js?v=53";
-import { deactivateLocal, hardDeleteLocal, saveLocal } from "./repository.js";
+import { deactivateLocal, saveLocal } from "./repository.js";
 
 function providerForm(existing) {
   const codigo = h("input", { class: "app-input", required: "required" });
@@ -484,16 +484,15 @@ export async function renderProveedores(root) {
       });
       remove.addEventListener("click", async (event) => {
         event.stopPropagation();
-        if (count > 0) {
-          await deactivateLocal("proveedores", row.id);
-          status.textContent = `${row.razon_social} tiene productos vinculados y quedó inactivo.`;
-        } else {
-          await hardDeleteLocal("proveedores", row.id);
-          status.textContent = `${row.razon_social} se eliminó.`;
-          if (expandedId === row.id) {
-            expandedId = null;
-          }
+        await deactivateLocal("proveedores", row.id);
+        const related = await db.producto_proveedores.filter((link) => link.proveedor_id === row.id && link.is_active !== false).toArray();
+        for (const link of related) {
+          await saveLocal("producto_proveedores", { ...link, is_active: false });
         }
+        status.textContent =
+          count > 0
+            ? `${row.razon_social} tiene historial y quedó inactivo.`
+            : `${row.razon_social} quedó inactivo.`;
         if (editing && editing.id === row.id) {
           editing = null;
           formOpen = false;

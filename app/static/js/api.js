@@ -88,7 +88,7 @@ export async function pullChanges(since) {
   return requestAuth(`/api/sync/pull${query}`);
 }
 
-export async function uploadMediaBlob(blob, filename, imageId = null) {
+export async function uploadMediaBlob(blob, filename, imageId = null, productoId = null) {
   const form = new FormData();
   const csrf = getCsrfToken();
   if (csrf) {
@@ -98,7 +98,14 @@ export async function uploadMediaBlob(blob, filename, imageId = null) {
   if (imageId) {
     form.append("image_id", imageId);
   }
+  if (productoId) {
+    form.append("producto_id", productoId);
+  }
   return requestAuth("/api/media/upload", { method: "POST", body: form });
+}
+
+export async function restoreCloudPhotos() {
+  return requestAuth("/api/media/restore-cloud", { method: "POST", json: {} });
 }
 
 export async function fetchBcvToday() {

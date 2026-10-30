@@ -10,9 +10,24 @@ function cloneRecord(record) {
   return JSON.parse(JSON.stringify(copy));
 }
 
+export const SOFT_DELETE_TABLES = new Set([
+  "categorias",
+  "subcategorias",
+  "campos_personalizados",
+  "proveedores",
+  "productos",
+  "producto_proveedores",
+  "producto_imagenes",
+  "solicitudes_restock",
+]);
+
 export async function enqueue(table, op, record) {
   if (table === "movimientos_inventario" && op !== "insert") {
     return;
+  }
+  if (SOFT_DELETE_TABLES.has(table) && op === "delete") {
+    op = "update";
+    record = { ...record, is_active: false };
   }
   if (table === "producto_imagenes" && op !== "delete") {
     const url = String(record.cloudinary_url || "").trim();
@@ -73,6 +88,9 @@ export async function deactivateLocal(table, id) {
 }
 
 export async function hardDeleteLocal(table, id) {
+  if (SOFT_DELETE_TABLES.has(table)) {
+    return deactivateLocal(table, id);
+  }
   const existing = await db.table(table).get(id);
   if (!existing) {
     return null;

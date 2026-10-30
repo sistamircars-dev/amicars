@@ -1,11 +1,13 @@
-from flask import Blueprint, current_app, jsonify, request
-
 import re
+from datetime import datetime, timezone
+
+from flask import Blueprint, current_app, jsonify, request
 
 from app.cloudinary_store import cloudinary_ready, upload_image_bytes
 from app.decorators import login_required
 from app.extensions import csrf, limiter
 from app.media import ImageValidationError, validate_image_file
+from app.supabase_client import user_client
 
 bp = Blueprint("media", __name__, url_prefix="/api/media")
 _UUID = re.compile(
@@ -16,7 +18,7 @@ _UUID = re.compile(
 @bp.post("/upload")
 @login_required
 @csrf.exempt
-@limiter.limit("20 per minute")
+@limiter.limit("60 per minute")
 def upload():
     file = request.files.get("file") or request.files.get("image")
     try:
@@ -33,12 +35,16 @@ def upload():
         ), 503
 
     image_id = (request.form.get("image_id") or "").strip()
+    producto_id = (request.form.get("producto_id") or "").strip()
     public_id = None
     if image_id and _UUID.match(image_id):
         public_id = f"amircars/repuestos/{image_id.lower()}"
+    context = None
+    if producto_id and _UUID.match(producto_id):
+        context = f"producto_id={producto_id.lower()}"
 
     try:
-        stored = upload_image_bytes(raw, public_id=public_id)
+        stored = upload_image_bytes(raw, public_id=public_id, context=context)
     except Exception as exc:
         current_app.logger.exception("Cloudinary upload failed")
         detail = re.sub(r"\s+", " ", str(exc)).strip()[:180]
@@ -74,3 +80,45 @@ def upload():
         return jsonify({"ok": False, "error": message}), 502
 
     return jsonify({"ok": True, **stored}), 200
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+@bp.post("/restore-cloud")
+@login_required
+@csrf.exempt
+@limiter.limit("12 per minute")
+def restore_cloud():
+    client = user_client()
+    try:
+        images = (
+            client.table("producto_imagenes")
+            .select("id,producto_id,cloudinary_url,cloudinary_public_id,is_active")
+            .execute()
+        )
+        products = client.table("productos").select("id,is_active").execute()
+    except Exception as exc:
+        current_app.logger.exception("restore-cloud list failed")
+        return jsonify({"ok": False, "error": str(exc)[:180]}), 502
+
+    active = {
+        str(row.get("id"))
+        for row in (products.data or [])
+        if row.get("is_active") is not False
+    }
+    restored = 0
+    stamp = _now()
+    for row in images.data or []:
+        if str(row.get("producto_id") or "") not in active:
+            continue
+        if not (row.get("cloudinary_url") or row.get("cloudinary_public_id")):
+            continue
+        if row.get("is_active") is False:
+            client.table("producto_imagenes").update({"is_active": True, "updated_at": stamp}).eq(
+                "id", row["id"]
+            ).execute()
+            restored += 1
+
+    return jsonify({"ok": True, "restored": restored}), 200
