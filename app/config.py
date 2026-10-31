@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -11,6 +12,14 @@ load_dotenv(ROOT_DIR / ".env")
 
 def _bool(name: str, default: str = "false") -> bool:
     return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _host_from_url(url: str, fallback: str) -> str:
+    raw = (url or "").strip()
+    if not raw:
+        return fallback
+    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+    return (parsed.hostname or fallback).strip() or fallback
 
 
 class Config:
@@ -24,8 +33,10 @@ class Config:
     TEMPLATES_AUTO_RELOAD = False
     EXPLAIN_TEMPLATE_LOADING = False
 
+    # JD Parfum isolated credentials — never reuse AmirCars live secrets.
     SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+    SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     CLOUDINARY_URL = (os.getenv("CLOUDINARY_URL") or "").strip().strip('"').strip("'")
     CLOUDINARY_CLOUD_NAME = (os.getenv("CLOUDINARY_CLOUD_NAME") or os.getenv("CLOUD_NAME") or "").strip()
     CLOUDINARY_API_KEY = (
@@ -39,15 +50,15 @@ class Config:
     FORCE_HTTPS = _bool("FORCE_HTTPS", "true")
     COOKIE_SECURE = _bool("COOKIE_SECURE", "true")
 
-    SESSION_COOKIE_NAME = "amircars_session"
+    SESSION_COOKIE_NAME = "jdparfum_session"
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SECURE = COOKIE_SECURE
     SESSION_COOKIE_SAMESITE = "Strict"
     SESSION_COOKIE_PATH = "/"
     PERMANENT_SESSION_LIFETIME = 60 * 60 * 12
 
-    JWT_ACCESS_COOKIE_NAME = "amircars_access"
-    JWT_REFRESH_COOKIE_NAME = "amircars_refresh"
+    JWT_ACCESS_COOKIE_NAME = "jdparfum_access"
+    JWT_REFRESH_COOKIE_NAME = "jdparfum_refresh"
     JWT_COOKIE_HTTPONLY = True
     JWT_COOKIE_SECURE = COOKIE_SECURE
     JWT_COOKIE_SAMESITE = "Strict"
@@ -72,5 +83,7 @@ class Config:
     MAX_IMAGE_BYTES = 5 * 1024 * 1024
     ALLOWED_IMAGE_MIMES = ("image/jpeg", "image/png", "image/webp")
 
-    SUPABASE_HOST = "lqhtbbkmkjoqyfzrofhh.supabase.co"
-    CLOUDINARY_HOST = "res.cloudinary.com"
+    SUPABASE_HOST = os.getenv("SUPABASE_HOST") or _host_from_url(
+        SUPABASE_URL, "YOUR_JD_PARFUM_PROJECT.supabase.co"
+    )
+    CLOUDINARY_HOST = os.getenv("CLOUDINARY_HOST") or "res.cloudinary.com"

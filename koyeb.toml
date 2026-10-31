@@ -1,7 +1,7 @@
 [app]
-name = "amircars"
+name = "jd-parfum"
 
-# Koyeb: Create App → GitHub → repo amircars → Build: Python (Procfile web: gunicorn).
+# Koyeb: Create App → GitHub → repo JD_Parfum → Build: Python (Procfile web: gunicorn).
 # Secrets (not in git): SUPABASE_URL, SUPABASE_KEY, FLASK_SECRET_KEY, CLOUDINARY_URL.
 
 [env]

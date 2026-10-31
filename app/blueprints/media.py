@@ -38,7 +38,7 @@ def upload():
     producto_id = (request.form.get("producto_id") or "").strip()
     public_id = None
     if image_id and _UUID.match(image_id):
-        public_id = f"amircars/repuestos/{image_id.lower()}"
+        public_id = f"jdparfum/productos/{image_id.lower()}"
     context = None
     if producto_id and _UUID.match(producto_id):
         context = f"producto_id={producto_id.lower()}"
@@ -125,12 +125,15 @@ def restore_cloud():
 
 
 def _cloud_url(public_id: str, image_id: str) -> str:
+    cloud = (current_app.config.get("CLOUDINARY_CLOUD_NAME") or "").strip()
+    if not cloud:
+        return ""
     pid = (public_id or "").strip().lstrip("/")
     if pid:
-        return f"https://res.cloudinary.com/mwzczz6i/image/upload/f_auto,q_auto/{pid}"
+        return f"https://res.cloudinary.com/{cloud}/image/upload/f_auto,q_auto/{pid}"
     iid = (image_id or "").strip().lower()
     if iid:
-        return f"https://res.cloudinary.com/mwzczz6i/image/upload/f_auto,q_auto/amircars/repuestos/{iid}"
+        return f"https://res.cloudinary.com/{cloud}/image/upload/f_auto,q_auto/jdparfum/productos/{iid}"
     return ""
 
 
@@ -187,7 +190,7 @@ def publish_photo_index():
             skipped += 1
             continue
         if not public_id:
-            public_id = f"amircars/repuestos/{image_id.lower()}"
+            public_id = f"jdparfum/productos/{image_id.lower()}"
         try:
             orden = int(raw.get("orden") or 0)
         except (TypeError, ValueError):

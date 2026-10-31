@@ -67,6 +67,17 @@ def make_client(access_token: Optional[str] = None) -> Client:
     return client
 
 
+def make_service_client() -> Optional[Client]:
+    """Optional service-role client for server-side public catalog reads.
+
+    Never commit a real key. When unset, the publishable key + anon RLS is used.
+    """
+    key = (current_app.config.get("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    if not key or key.lower().startswith("replace") or "your_" in key.lower():
+        return None
+    return _create_supabase_client(current_app.config["SUPABASE_URL"], key)
+
+
 def read_access_token() -> Optional[str]:
     token = request.cookies.get(current_app.config["JWT_ACCESS_COOKIE_NAME"])
     if token:

@@ -7,7 +7,8 @@ from pathlib import Path
 from flask import Flask
 
 NAMES = ("fondo", "logo")
-EXTS = (".png", ".jpg", ".jpeg", ".webp")
+EXTS = ("*.png", "*.jpg", "*.jpeg", "*.webp")
+BRAND_DIRNAME = "jdparfum"
 
 
 def _desktop_candidates() -> list[Path]:
@@ -41,11 +42,12 @@ def _desktop_candidates() -> list[Path]:
     return unique
 
 
-def find_amircars_folder() -> Path | None:
+def find_brand_folder() -> Path | None:
     for desktop in _desktop_candidates():
-        candidate = desktop / "amircars"
-        if candidate.is_dir():
-            return candidate
+        for name in ("jdparfum", "jd-parfum", "JD_Parfum", "amircars"):
+            candidate = desktop / name
+            if candidate.is_dir():
+                return candidate
     return None
 
 
@@ -64,7 +66,7 @@ def rebuild_pwa_icons(dest_dir: Path) -> None:
         return
     img = Image.open(logo_path)
     for size in (192, 512):
-        canvas = Image.new("RGBA", (size, size), (11, 12, 16, 255))
+        canvas = Image.new("RGBA", (size, size), (10, 22, 40, 255))
         copy = img.convert("RGBA")
         copy.thumbnail((size, size), Image.Resampling.LANCZOS)
         x = (size - copy.width) // 2
@@ -75,12 +77,12 @@ def rebuild_pwa_icons(dest_dir: Path) -> None:
 
 def copy_brand_assets(dest_dir: Path) -> dict[str, str]:
     dest_dir.mkdir(parents=True, exist_ok=True)
-    source = find_amircars_folder()
+    source = find_brand_folder()
     copied: dict[str, str] = {}
     if source is None:
         return copied
     for name in NAMES:
-        for ext in EXTS:
+        for ext in (".png", ".jpg", ".jpeg", ".webp"):
             src = source / f"{name}{ext}"
             if not src.is_file():
                 continue
@@ -98,8 +100,8 @@ def copy_brand_assets(dest_dir: Path) -> dict[str, str]:
 
 
 def apply_brand_assets(app: Flask) -> None:
-    dest = Path(app.static_folder) / "img" / "amircars"
+    dest = Path(app.static_folder) / "img" / BRAND_DIRNAME
     try:
         copy_brand_assets(dest)
     except Exception:
-        app.logger.warning("No se pudieron copiar los activos de marca AMIRCARS")
+        app.logger.warning("No se pudieron copiar los activos de marca JD Parfum")

@@ -20,11 +20,11 @@ function isOnline() {
 function sessionNeedsRefresh() {
   const raw = document.cookie
     .split("; ")
-    .find((part) => part.startsWith("amircars_session_exp="));
+    .find((part) => part.startsWith("jdparfum_session_exp="));
   if (!raw) {
     return true;
   }
-  const value = decodeURIComponent(raw.slice("amircars_session_exp=".length));
+  const value = decodeURIComponent(raw.slice("jdparfum_session_exp=".length));
   const expires = Date.parse(value);
   if (!Number.isFinite(expires)) {
     return true;

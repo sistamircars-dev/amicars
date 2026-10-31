@@ -1,6 +1,6 @@
 import { healthCheck, runtimeInfo } from "./api.js";
 
-const REVISION_KEY = "amircars-revision";
+const REVISION_KEY = "jdparfum-revision";
 let deferredInstall = null;
 let reloading = false;
 
@@ -118,8 +118,8 @@ export async function refreshServiceWorker() {
 
 export function downloadClientScript() {
   const link = document.createElement("a");
-  link.href = `${window.location.origin}/install/amircars-pc.cmd`;
-  link.download = "amircars-acceso.cmd";
+  link.href = `${window.location.origin}/install/jdparfum-pc.cmd`;
+  link.download = "jdparfum-acceso.cmd";
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -154,9 +154,9 @@ export function startRuntime() {
     downloadClientScript();
   });
   window.addEventListener("online", () => {
-    const loaded = Number(window.sessionStorage.getItem("amircars-loaded") || "0");
+    const loaded = Number(window.sessionStorage.getItem("jdparfum-loaded") || "0");
     if (loaded && Date.now() - loaded > 6 * 60 * 60 * 1000) {
-      window.sessionStorage.setItem("amircars-loaded", String(Date.now()));
+      window.sessionStorage.setItem("jdparfum-loaded", String(Date.now()));
       reloadOnce();
       return;
     }
@@ -164,8 +164,8 @@ export function startRuntime() {
     applyRemoteRevision();
     healthCheck();
   });
-  if (!window.sessionStorage.getItem("amircars-loaded")) {
-    window.sessionStorage.setItem("amircars-loaded", String(Date.now()));
+  if (!window.sessionStorage.getItem("jdparfum-loaded")) {
+    window.sessionStorage.setItem("jdparfum-loaded", String(Date.now()));
   }
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && navigator.onLine) {

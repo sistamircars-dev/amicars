@@ -106,7 +106,7 @@
   filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.35));
 }
 
-.float-photo[src*="/img/amircars/logo."] {
+.float-photo[src*="/img/jdparfum/logo."] {
   height: 100%;
   margin-top: 0;
   padding: 0.35rem;
@@ -338,7 +338,7 @@ tr.move-voided td {
   border-radius: 12px;
 }
 
-.mosaic-photo[src*="/img/amircars/logo."] {
+.mosaic-photo[src*="/img/jdparfum/logo."] {
   object-fit: contain;
 }
 
@@ -420,7 +420,7 @@ tr.move-voided td {
   object-position: center;
 }
 
-.zoom-base[src*="/img/amircars/logo."] {
+.zoom-base[src*="/img/jdparfum/logo."] {
   object-fit: contain;
 }
 
@@ -478,7 +478,7 @@ tr.move-voided td {
   border: 1px solid rgba(255, 255, 255, 0.16);
 }
 
-.detail-thumb[src*="/img/amircars/logo."] {
+.detail-thumb[src*="/img/jdparfum/logo."] {
   object-fit: contain;
 }
 
@@ -713,7 +713,7 @@ tr.move-voided td {
   background: rgba(11, 12, 16, 0.45);
 }
 
-.pool-photo[src*="/img/amircars/logo."] {
+.pool-photo[src*="/img/jdparfum/logo."] {
   object-fit: contain;
 }
 

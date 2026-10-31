@@ -18,7 +18,7 @@ export const ENTITY_TABLES = [
 
 export const PUSH_ORDER = [...ENTITY_TABLES];
 
-export const db = new Dexie("amircars");
+export const db = new Dexie("jdparfum");
 
 db.version(1).stores({
   categorias: "id, updated_at, is_active, nombre, orden",

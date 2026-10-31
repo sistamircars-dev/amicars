@@ -1,4 +1,4 @@
-const CACHE = "amircars-offline-v48";
+const CACHE = "jdparfum-offline-v1";
 const PRECACHE = [
   "/offline.html",
   "/manifest.json",
@@ -43,10 +43,10 @@ const PRECACHE = [
   "/static/js/app.js",
   "/static/css/app.css?v=17",
   "/static/css/catalog.css?v=27",
-  "/static/img/amircars/logo.png",
-  "/static/img/amircars/pwa-icon-192.png",
-  "/static/img/amircars/pwa-icon-512.png",
-  "/static/img/amircars/fondo.jpg?v=14",
+  "/static/img/jdparfum/logo.png",
+  "/static/img/jdparfum/pwa-icon-192.png",
+  "/static/img/jdparfum/pwa-icon-512.png",
+  "/static/img/jdparfum/fondo.jpg?v=1",
 ];
 
 self.addEventListener("install", (event) => {

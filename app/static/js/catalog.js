@@ -4,7 +4,7 @@ import { promptJustification } from "./promptJustification.js";
 import { queueOfflineImage, saveLocal } from "./repository.js";
 import { getTasa } from "./store.js";
 
-export const PLACEHOLDER = "/static/img/amircars/logo.png";
+export const PLACEHOLDER = "/static/img/jdparfum/logo.png";
 
 const blobUrls = new Map();
 
@@ -61,7 +61,7 @@ export function blobUrlFor(item) {
 export function safeImg(src, alt, className) {
   const img = document.createElement("img");
   img.className = className || "";
-  img.alt = alt || "AMIRCARS";
+  img.alt = alt || "JD Parfum";
   img.src = src || PLACEHOLDER;
   img.addEventListener("error", () => {
     if (img.dataset.fallback === "1") {

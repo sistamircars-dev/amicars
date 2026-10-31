@@ -8,11 +8,11 @@ _INSTALL_CMD = """@echo off
 chcp 65001 >nul
 set "URL={origin}/"
 echo.
-echo  AMIRCARS - acceso en este equipo
+echo  JD Parfum - acceso en este equipo
 echo  ================================
 echo  1. Se abrira la app en el navegador.
 echo  2. Inicie sesion y vaya a Configuracion - Instalar en este equipo.
-echo  3. Para servidor local con Python use AMIRCARS.cmd opcion 2 desde el repo.
+echo  3. Para servidor local con Python use JD Parfum.cmd opcion 2 desde el repo.
 echo.
 start "" "%URL%"
 """
@@ -43,13 +43,13 @@ def offline():
     return send_from_directory(current_app.static_folder, "offline.html")
 
 
-@bp.get("/install/amircars-pc.cmd")
+@bp.get("/install/jdparfum-pc.cmd")
 @limiter.exempt
 def install_cmd():
     origin = request.url_root.rstrip("/")
     body = _INSTALL_CMD.format(origin=origin)
     response = make_response(body)
     response.headers["Content-Type"] = "application/octet-stream"
-    response.headers["Content-Disposition"] = 'attachment; filename="amircars-acceso.cmd"'
+    response.headers["Content-Disposition"] = 'attachment; filename="jdparfum-acceso.cmd"'
     response.headers["Cache-Control"] = "no-store"
     return response

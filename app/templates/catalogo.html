@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JD Parfum — Catálogo</title>
+    <meta name="description" content="Catálogo público JD Parfum. Fragrancias de lujo." />
+    <meta name="theme-color" content="#0A1628" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='img/jdparfum/pwa-icon-192.png') }}" />
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/jdparfum/pwa-icon-192.png') }}" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/storefront.css') }}?v=1" />
+  </head>
+  <body class="storefront-body">
+    <header class="sf-top">
+      <button type="button" class="sf-cart-btn" id="cart-toggle" aria-label="Abrir carrito">
+        <span>Carrito</span>
+        <span class="sf-cart-count" id="cart-count">0</span>
+      </button>
+      <a class="sf-login" href="{{ url_for('auth.login') }}">Login</a>
+    </header>
+
+    <section class="sf-hero" aria-label="JD Parfum">
+      <img
+        class="sf-hero-logo"
+        src="{{ url_for('static', filename='img/jdparfum/logo.png') }}"
+        alt="JD Parfum"
+      />
+      <h1 class="sf-brand">JD Parfum</h1>
+      <p class="sf-tagline">Fragrancias de lujo · Catálogo público</p>
+    </section>
+
+    <main class="sf-main">
+      <div class="sf-toolbar">
+        <label class="sf-search">
+          <span class="visually-hidden">Buscar</span>
+          <input id="catalog-search" type="search" placeholder="Buscar fragancia…" autocomplete="off" />
+        </label>
+        <p class="sf-status" id="catalog-status" aria-live="polite">Cargando catálogo…</p>
+      </div>
+      <div class="sf-grid" id="catalog-grid"></div>
+    </main>
+
+    <aside class="sf-cart-drawer" id="cart-drawer" hidden>
+      <div class="sf-cart-panel">
+        <header class="sf-cart-head">
+          <h2>Tu selección</h2>
+          <button type="button" class="sf-icon-btn" id="cart-close" aria-label="Cerrar carrito">×</button>
+        </header>
+        <div class="sf-cart-list" id="cart-list"></div>
+        <footer class="sf-cart-foot">
+          <div class="sf-cart-total">
+            <span>Total REF</span>
+            <strong id="cart-total">0.00</strong>
+          </div>
+          <p class="sf-cart-note">Guarde su selección. Un asesor confirmará disponibilidad al iniciar sesión o contactarlo.</p>
+          <button type="button" class="sf-btn ghost" id="cart-clear">Vaciar carrito</button>
+        </footer>
+      </div>
+    </aside>
+
+    <script type="module" src="{{ url_for('static', filename='js/storefront.js') }}?v=1"></script>
+  </body>
+</html>
