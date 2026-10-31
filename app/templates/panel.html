@@ -3,15 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AMIRCARS — Panel</title>
+    <title>JD Parfum — Panel</title>
     <meta name="robots" content="noindex,nofollow" />
-    <meta name="theme-color" content="#D90429" />
+    <meta name="theme-color" content="#0A1628" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='img/amircars/pwa-icon-192.png') }}" />
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/amircars/pwa-icon-192.png') }}" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=17" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/catalog.css') }}?v=31" />
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='img/jdparfum/pwa-icon-192.png') }}" />
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/jdparfum/pwa-icon-192.png') }}" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=18" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/catalog.css') }}?v=32" />
   </head>
   <body class="app-body">
     <div class="app-shell" id="app-shell">
@@ -25,11 +28,11 @@
         <div class="topbar-center">
           <div class="rate-chip" id="rate-chip">Tasa BCV: —</div>
         </div>
-        <img class="topbar-logo" src="{{ url_for('static', filename='img/amircars/logo.png') }}" alt="AMIRCARS" />
+        <img class="topbar-logo" src="{{ url_for('static', filename='img/jdparfum/logo.png') }}" alt="JD Parfum" />
       </header>
       <aside class="glass sidebar" id="sidebar">
         <div class="sidebar-head">
-          <img class="sidebar-logo" src="{{ url_for('static', filename='img/amircars/logo.png') }}" alt="" />
+          <img class="sidebar-logo" src="{{ url_for('static', filename='img/jdparfum/logo.png') }}" alt="" />
         </div>
         <nav class="nav-list" id="nav-list"></nav>
         <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}">
@@ -40,6 +43,6 @@
       <main class="glass panel-main" id="view-root"></main>
     </div>
     <script src="{{ url_for('static', filename='vendor/dexie.min.js') }}"></script>
-    <script type="module" src="{{ url_for('static', filename='js/app.js') }}?v=59"></script>
+    <script type="module" src="{{ url_for('static', filename='js/app.js') }}?v=60"></script>
   </body>
 </html>

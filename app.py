@@ -1,4 +1,4 @@
-"""Servidor local AMIRCARS (python app.py)."""
+"""Servidor local JD Parfum (python app.py)."""
 from app import app
 
 if __name__ == "__main__":

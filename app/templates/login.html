@@ -3,20 +3,23 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AMIRCARS — Acceso</title>
+    <title>JD Parfum — Acceso</title>
     <meta name="robots" content="noindex,nofollow" />
-    <meta name="theme-color" content="#D90429" />
+    <meta name="theme-color" content="#0A1628" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='img/amircars/pwa-icon-192.png') }}" />
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/amircars/pwa-icon-192.png') }}" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=17" />
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='img/jdparfum/pwa-icon-192.png') }}" />
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/jdparfum/pwa-icon-192.png') }}" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=18" />
   </head>
   <body class="login-body">
     <main class="login-wrap">
       <section class="glass login-card">
-        <img class="login-logo" src="{{ url_for('static', filename='img/amircars/logo.png') }}" alt="AMIRCARS" />
-        <h1>AMIRCARS</h1>
-        <p>Lubricantes · Filtros · Repuestos</p>
+        <img class="login-logo" src="{{ url_for('static', filename='img/jdparfum/logo.png') }}" alt="JD Parfum" />
+        <h1>JD Parfum</h1>
+        <p>Panel de administración</p>
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             <ul class="flash-list">
@@ -38,16 +41,13 @@
           </label>
           <button class="btn" type="submit">Entrar al panel</button>
         </form>
+        <p class="login-back"><a href="{{ url_for('catalog.storefront') }}">← Volver al catálogo</a></p>
       </section>
     </main>
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("/sw.js", { scope: "/" });
       }
-      if (!navigator.onLine) {
-        location.replace("/");
-      }
     </script>
   </body>
 </html>
-

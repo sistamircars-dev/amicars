@@ -55,12 +55,14 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     from app.blueprints.archive import bp as archive_bp
     from app.blueprints.auth import bp as auth_bp
     from app.blueprints.bcv import bp as bcv_bp
+    from app.blueprints.catalog import bp as catalog_bp
     from app.blueprints.health import bp as health_bp
     from app.blueprints.media import bp as media_bp
     from app.blueprints.panel import bp as panel_bp
     from app.blueprints.pwa import bp as pwa_bp
     from app.blueprints.sync import bp as sync_bp
 
+    app.register_blueprint(catalog_bp)
     app.register_blueprint(pwa_bp)
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)

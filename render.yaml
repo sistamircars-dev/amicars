@@ -1,8 +1,8 @@
-# AMIRCARS en Render — https://amircars.onrender.com
-# Start command recomendado (Settings): gunicorn --config gunicorn.conf.py wsgi:app
+# JD Parfum en Render — isolated from AmirCars
+# Start command: gunicorn --config gunicorn.conf.py wsgi:app
 services:
   - type: web
-    name: amircars
+    name: jd-parfum
     runtime: python
     plan: free
     branch: main
@@ -25,6 +25,8 @@ services:
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: CLOUDINARY_URL
         sync: false

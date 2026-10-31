@@ -1,18 +1,20 @@
 :root {
-  --bg-deep: #0b0c10;
-  --bg-panel: #121318;
-  --steel: #1f2833;
-  --metal: #8e9aaf;
-  --red: #d90429;
-  --red-hot: #ef233c;
-  --white: #ffffff;
-  --glass: rgba(18, 19, 24, 0.62);
-  --glass-border: rgba(255, 255, 255, 0.12);
-  --muted: rgba(255, 255, 255, 0.68);
+  --bg-deep: #07111f;
+  --bg-panel: #0f1c2e;
+  --steel: #13233a;
+  --metal: #c9a227;
+  --red: #c9a227;
+  --red-hot: #e6d18a;
+  --white: #f4efe4;
+  --glass: rgba(10, 22, 40, 0.72);
+  --glass-border: rgba(201, 162, 39, 0.28);
+  --muted: rgba(244, 239, 228, 0.68);
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
-  --radius: 18px;
+  --radius: 12px;
   --sidebar: 300px;
   --sidebar-collapsed: 78px;
+  --serif: "Cormorant Garamond", "Times New Roman", serif;
+  --sans: "Outfit", "Segoe UI", sans-serif;
 }
 
 * {
@@ -24,7 +26,7 @@ body {
   margin: 0;
   min-height: 100%;
   color: var(--white);
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-family: var(--sans);
   background: var(--bg-deep);
 }
 
@@ -33,8 +35,8 @@ body.login-body {
   min-height: 100vh;
   background-color: var(--bg-deep);
   background-image:
-    linear-gradient(90deg, rgba(11, 12, 16, 0.88) 0%, rgba(11, 12, 16, 0.62) 42%, rgba(11, 12, 16, 0.42) 100%),
-    url("/static/img/amircars/fondo.jpg?v=14");
+    linear-gradient(90deg, rgba(7, 17, 31, 0.9) 0%, rgba(7, 17, 31, 0.68) 42%, rgba(7, 17, 31, 0.5) 100%),
+    url("/static/img/jdparfum/fondo.jpg?v=1");
   background-repeat: no-repeat, no-repeat;
   background-size: cover, cover;
   background-position: center, center;
@@ -106,13 +108,29 @@ body.login-body {
 
 .login-card h1 {
   margin: 0 0 0.35rem;
-  font-size: 1.15rem;
+  font-family: var(--serif);
+  font-size: 1.55rem;
   letter-spacing: 0.16em;
+  color: var(--red-hot);
 }
 
 .login-card p {
   margin: 0 0 1.2rem;
   color: var(--muted);
+}
+
+.login-back {
+  margin: 1rem 0 0 !important;
+}
+
+.login-back a {
+  color: var(--red-hot);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+}
+
+.login-back a:hover {
+  text-decoration: underline;
 }
 
 .login-card form {
@@ -351,7 +369,7 @@ textarea.app-input {
   border-radius: 12px;
 }
 
-.cat-thumb[src*="/img/amircars/logo."] {
+.cat-thumb[src*="/img/jdparfum/logo."] {
   object-fit: contain;
 }
 

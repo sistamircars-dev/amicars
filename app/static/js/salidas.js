@@ -43,8 +43,8 @@ export function printTicket(ticket) {
   td, th { text-align: left; padding: 2px 0; border-bottom: 1px solid #ddd; }
   .right { text-align: right; }
 </style></head><body>
-  <img src="/static/img/amircars/logo.png" alt="AMIRCARS">
-  <h1>AMIRCARS</h1>
+  <img src="/static/img/jdparfum/logo.png" alt="JD Parfum">
+  <h1>JD Parfum</h1>
   <p>Ticket ${ticketText(ticket.correlativo)}<br>Fecha ${ticketText(ticket.fecha)}</p>
   <p>Cliente: ${ticketText(ticket.cliente)}<br>Cédula/RIF: ${ticketText(ticket.documento || "—")}</p>
   <p>Tasa: ${ticket.tasa ? `${money(ticket.tasa)} Bs/USD` : "sin tasa"}</p>
@@ -54,9 +54,9 @@ export function printTicket(ticket) {
   </table>
   <p class="right"><strong>Total ${money(totalRef)} REF</strong><br><strong>${ticket.tasa ? `${money(totalBs)} Bs` : "Bs pendiente de tasa"}</strong></p>
 </body></html>`;
-  document.getElementById("amircars-ticket")?.remove();
+  document.getElementById("jdparfum-ticket")?.remove();
   const frame = document.createElement("iframe");
-  frame.id = "amircars-ticket";
+  frame.id = "jdparfum-ticket";
   frame.setAttribute("title", "Ticket de salida");
   frame.style.position = "fixed";
   frame.style.width = "0";

@@ -9,7 +9,7 @@ import cloudinary.uploader
 from cloudinary.utils import cloudinary_url
 from flask import current_app
 
-FOLDER = "amircars/repuestos"
+FOLDER = "jdparfum/productos"
 
 
 _PLACEHOLDERS = {

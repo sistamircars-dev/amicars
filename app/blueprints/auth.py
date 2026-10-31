@@ -47,7 +47,7 @@ def _set_auth_cookies(response, session) -> None:
         )
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
     response.set_cookie(
-        "amircars_session_exp",
+        "jdparfum_session_exp",
         expires_at.isoformat(),
         max_age=expires_in,
         httponly=False,
@@ -62,6 +62,7 @@ def _clear_auth_cookies(response) -> None:
     for name in (
         cfg["JWT_ACCESS_COOKIE_NAME"],
         cfg["JWT_REFRESH_COOKIE_NAME"],
+        "jdparfum_session_exp",
         "amircars_session_exp",
         cfg["SESSION_COOKIE_NAME"],
     ):

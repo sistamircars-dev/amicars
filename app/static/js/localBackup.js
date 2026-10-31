@@ -18,9 +18,9 @@ const ENTITY_BACKUP = [
 
 const LOCAL_STATE = ["sync_queue", "offline_media_queue", "meta"];
 
-export const BACKUP_FORMAT = "amircars-local-backup";
+export const BACKUP_FORMAT = "jdparfum-local-backup";
 export const BACKUP_VERSION = 1;
-export const ARCHIVE_FORMAT = "amircars-disk-archive";
+export const ARCHIVE_FORMAT = "jdparfum-disk-archive";
 export const ARCHIVE_VERSION = 1;
 export const BACKUP_TABLES = [
   ...ENTITY_BACKUP,
@@ -28,7 +28,7 @@ export const BACKUP_TABLES = [
   ...LOCAL_STATE,
 ];
 
-const BLOB_MARK = "__amircars_blob";
+const BLOB_MARK = "__jdparfum_blob";
 
 function bytesToBinary(bytes) {
   let binary = "";
@@ -123,7 +123,7 @@ export function countBackupRows(payload) {
 
 export function backupFilename(payload) {
   const stamp = String((payload && payload.exported_at) || new Date().toISOString()).replace(/[:.]/g, "-");
-  return `amircars-respaldo-${stamp}.json`;
+  return `jdparfum-respaldo-${stamp}.json`;
 }
 
 export function readBackup(source) {
@@ -136,7 +136,7 @@ export function readBackup(source) {
     }
   }
   if (!data || data.format !== BACKUP_FORMAT || data.version !== BACKUP_VERSION) {
-    throw new Error("El archivo no es un respaldo de AMIRCARS.");
+    throw new Error("El archivo no es un respaldo de JD Parfum.");
   }
   if (!data.tables || typeof data.tables !== "object") {
     throw new Error("El respaldo no contiene tablas.");
@@ -208,7 +208,7 @@ export function restoreLocalBackup(source) {
 
 export function archiveFilename(kind = "historico") {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return `amircars-${kind}-${stamp}.json`;
+  return `jdparfum-${kind}-${stamp}.json`;
 }
 
 export async function buildDiskArchive(tables, extra = {}) {
@@ -231,7 +231,7 @@ export function readDiskArchive(source) {
     data = JSON.parse(source);
   }
   if (!data || data.format !== ARCHIVE_FORMAT || data.version !== ARCHIVE_VERSION) {
-    throw new Error("El archivo no es un histórico de AMIRCARS.");
+    throw new Error("El archivo no es un histórico de JD Parfum.");
   }
   if (!data.tables || typeof data.tables !== "object") {
     throw new Error("El histórico no contiene tablas.");

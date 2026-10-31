@@ -39,7 +39,7 @@ export async function pickArchiveDir() {
     throw new Error("Este navegador no permite elegir una carpeta de archivo.");
   }
   const handle = await window.showDirectoryPicker({
-    id: "amircars-archivo",
+    id: "jdparfum-archivo",
     mode: "readwrite",
     startIn: "documents",
   });

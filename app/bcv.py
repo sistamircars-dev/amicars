@@ -11,7 +11,7 @@ TIMEOUT = 12.0
 HEADERS = {
     "Accept": "application/json",
     "Cache-Control": "no-cache",
-    "User-Agent": "amircars",
+    "User-Agent": "jdparfum",
 }
 
 
